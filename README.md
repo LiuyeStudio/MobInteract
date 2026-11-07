@@ -84,6 +84,16 @@
 
 更多排查思路见 [常见问题与已知限制](https://github.com/LiuyeStudio/MobInteract/wiki/FAQ)。
 
+## 交流与反馈
+
+| 渠道 | 地址 |
+| --- | --- |
+| QQ 群（流叶科技工作室︱官方交流群） | **995974858** |
+| 问题反馈 | [GitHub Issues](https://github.com/LiuyeStudio/MobInteract/issues) |
+| 源码与其它作品 | [LiuyeStudio](https://github.com/LiuyeStudio) |
+
+提问前先看一遍 [常见问题与已知限制](https://github.com/LiuyeStudio/MobInteract/wiki/FAQ)，并附上服务端类型与版本、插件版本、`/mobinteract status` 的输出。
+
 ## 许可
 
 [Apache License 2.0](LICENSE) © 2026 [流叶科技工作室 LiuyeStudio](https://github.com/LiuyeStudio) · 作者 [@nukebean](https://github.com/nukebean)

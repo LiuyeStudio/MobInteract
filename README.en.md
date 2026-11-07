@@ -84,6 +84,16 @@ Every key, default value and tuning advice lives in the wiki, one page per topic
 
 More troubleshooting in [FAQ and Known Limitations](https://github.com/LiuyeStudio/MobInteract/wiki/FAQ-en).
 
+## Community
+
+| Channel | Where |
+| --- | --- |
+| QQ group (LiuyeStudio official, Chinese) | **995974858** |
+| Bug reports | [GitHub Issues](https://github.com/LiuyeStudio/MobInteract/issues) |
+| More projects | [LiuyeStudio](https://github.com/LiuyeStudio) |
+
+Before asking, please read [FAQ and Known Limitations](https://github.com/LiuyeStudio/MobInteract/wiki/FAQ-en) and include your server type and version, plugin version, and the output of `/mobinteract status`.
+
 ## License
 
 [Apache License 2.0](LICENSE) © 2026 [LiuyeStudio](https://github.com/LiuyeStudio) · Author [@nukebean](https://github.com/nukebean)

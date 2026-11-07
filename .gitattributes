@@ -1,0 +1,18 @@
+# 仓库内统一按文本存储（检出到工作区时使用平台默认换行）
+* text=auto
+
+*.java   text
+*.xml    text
+*.yml    text
+*.yaml   text
+*.md     text
+*.json   text
+*.sh     text eol=lf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# 二进制
+*.jar    binary
+*.png    binary
+*.jpg    binary
+*.gif    binary

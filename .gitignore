@@ -1,0 +1,45 @@
+# ============================================================
+# 本仓库只公开文档与发布页。
+# 源码、构建脚本与开发资料保留在本地，但不纳入版本管理。
+# ============================================================
+/src/
+/pom.xml
+/.github/
+/docs/
+/run/
+/server/
+/plugins/
+
+# ---- 本地构建产物 ----
+target/
+classes/
+*.class
+*.jar
+*.log
+pom.xml.versionsBackup
+release.properties
+dependency-reduced-pom.xml
+pending-blocks.txt
+
+# ---- 本地测试服务端 ----
+logs/
+world/
+world_nether/
+world_the_end/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+nbproject/
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,175 @@
+# ============================================================
+#  MobInteract - mining.yml
+#  人形怪物“挖掘方块”行为配置
+#  运行目标：Folia / Paper / Purpur / Canvas 1.21.8 ~ 26.x（同一个 jar）
+#  修改后可用 /mobinteract reload 热重载，不会打断正在进行的挖掘任务。
+# ============================================================
+
+# 总开关。false 时所有怪物都不会挖掘。
+enabled: true
+
+# 调试日志：把每个候选方块的取舍原因打到控制台（排查“为什么不挖”时打开）。
+# 会刷屏，排查完记得关掉。
+debug: false
+
+# 世界筛选（挖掘）。
+# 留空 = 所有世界生效；只想在某些世界生效就填白名单（世界名，不区分大小写）：
+#   worlds:
+#     whitelist: [world, resource_world]
+# 黑名单优先级最高（白名单里也写了也会被排除）：
+#   worlds:
+#     blacklist: [spawn]
+worlds:
+  whitelist: []
+  blacklist: []
+
+# 生物筛选（挖掘）。
+# 留空表示“所有默认人形怪物”：僵尸系、骷髅系、村民/流浪商人、灾厄村民系、女巫、猪灵系。
+# 填入具体类型可自定义接管其他生物，例如：
+#   mob-whitelist: [ZOMBIE, IRON_GOLEM, WOLF, PIGLIN]
+# 想接管全部生物就写通配符（也可写 ALL / ANY）：
+#   mob-whitelist: ["*"]
+# 黑名单优先级最高，即使同时出现在白名单里也会被排除：
+#   mob-blacklist: [VILLAGER, WANDERING_TRADER]
+# 注意：只支持能挂载 AI 的“生物”（Mob 子类）；船、盔甲架、掉落物等非生物无法接管。
+mob-whitelist: []
+mob-blacklist: []
+
+# 怪物到目标方块的最大挖掘距离上限（require-adjacent 为 true 时以“邻接”为准）。
+max-distance: 4.5
+
+# 只允许挖掘紧挨着怪物的方块（禁止隔空挖掘）：
+# 目标方块必须与怪物身体紧贴：水平 ±1 格、竖直 ±1 格以内。
+# 设为 false 时退回按 max-distance 判断。
+require-adjacent: true
+
+# 不挖掘“怪物刚放下的方块”，避免有镐子的怪物把同伴搭好的桥 / 台阶拆掉。
+# 该标记同时用于临时方块的到期清理，与 block-lifetime-seconds 无关。
+protect-mob-blocks: true
+
+# 挖掘耗时。
+break-time:
+  # 默认倍率，**以木镐为基准**：怪物耗时 = 玩家基础耗时 × 本值 ÷ 镐子速度系数。
+  # 木镐在 tool.speed 里的系数是 1.0，所以本值就是“木镐怪物”的倍率；
+  # 换成更好的镐子会按系数加速。
+  # 玩家基础耗时在运行时由 Material#getHardness() 推算（空手：1.5 × 硬度 秒），
+  # 不在配置里硬编码几百个方块的时间。
+  # 4.0 = 玩家耗时的 4 倍（比 1.2.0 之前的 2.0 慢一半，即“挖掘速度 0.5 倍”）。
+  multiplier: 4.0
+  # 兜底下限：硬度为 0 的方块（草、花等）按该耗时处理。
+  min-seconds: 0.2
+  # 上限：计算耗时长于该值的方块视为“挖不动”，直接跳过（等效禁止）。
+  # 注意这里的耗时是“已经算完倍率与镐子速度”的**最终秒数**，硬方块很容易顶到它。
+  # 以黑曜石为例（硬度 50 → 基础 75 s），本文件 materials.multiplier 给黑曜石设了 6.0，
+  # 所以最终耗时是 75 × 6 ÷ 镐子系数：木镐 450 s / 石镐 225 s / 铁镐 150 s / 钻石镐 112.5 s。
+  # 按现在的 180 s 上限：木镐、石镐会跳过（日志里提示一次），铁镐与钻石镐能挖。
+  # 想让木镐也能啃黑曜石就把上限调大（比如 500），想彻底禁止就把它调小。
+  hard-cap-seconds: 180.0
+  # 进度推进间隔（tick）。1 = 每 tick 推进；2 = 每 2 tick 推进一次。
+  tick-interval: 2
+
+# 工具（镐子）相关。
+tool:
+  # 是否要求怪物主手持有镐子才能挖掘。默认开启：
+  # 没有镐子的怪物完全不挖方块（它们可以通过下面的 give 配置自带镐子）。
+  # 设为 false 时，空手也能挖，但速度用 hand-speed 计算，
+  # 手持镐子则按下方材质系数加速。
+  require-pickaxe: true
+
+  # 空手时的速度系数（相对木镐），只在 require-pickaxe: false 时生效。
+  hand-speed: 0.5
+
+  # 镐子材质 → 速度系数（相对木镐，木镐 = 1.0）。
+  # 系数越大越快：耗时 = 基础 × 倍率 ÷ 系数。
+  # 数值参考原版挖掘速度（木 2 / 石 4 / 铜 5 / 铁 6 / 金 12 / 钻石 8 / 下界合金 9）。
+  speed:
+    WOODEN_PICKAXE: 1.0
+    STONE_PICKAXE: 2.0
+    COPPER_PICKAXE: 2.5
+    IRON_PICKAXE: 3.0
+    GOLDEN_PICKAXE: 6.0
+    DIAMOND_PICKAXE: 4.0
+    NETHERITE_PICKAXE: 4.5
+
+  # 怪物自带镐子（进入世界时抽一次签；主手已有物品时不覆盖）。
+  give:
+    enabled: true
+    # 拥有镐子的概率（0.0 - 1.0）；require-pickaxe 为 true 时，这个值等于“会挖方块的怪物比例”。
+    # 该概率与 placement.yml 的 backpack.chance 相乘，决定“既带方块又能挖”的比例。
+    chance: 0.8
+    # 材质权重表（无放回不需要，单次抽样）。
+    materials:
+      WOODEN_PICKAXE: 60
+      STONE_PICKAXE: 25
+      IRON_PICKAXE: 12
+      DIAMOND_PICKAXE: 3
+    # 插件发放的镐子死亡掉落概率（0 = 不掉落，默认）。
+    # 怪物自身携带的方块背包是虚拟的，永远不会掉落物品。
+    drop-chance: 0.0
+
+# 方块过滤与逐方块倍率覆盖。
+materials:
+  # 额外禁用列表（在安全黑名单之外再禁用）。写 Material 名称。
+  disabled:
+    - WATER
+    - LAVA
+  # 按方块类型覆盖倍率（禁止逐项硬编码时间，只覆盖倍率）。
+  # 数值越大越慢；如需等效禁止，可写极大值（如 1000）或直接放进 disabled。
+  multiplier:
+    OBSIDIAN: 6.0
+    CRYING_OBSIDIAN: 6.0
+    ANCIENT_DEBRIS: 8.0
+    REINFORCED_DEEPSLATE: 20.0
+    RESPAWN_ANCHOR: 10.0
+  # 若不空，则只有列表内的方块允许挖掘（总白名单，优先级最高）。
+  allowed: []
+
+# 触发条件。
+trigger:
+  # 追击目标被方块阻挡（从眼睛到目标的第一处不可通过方块）时触发。
+  path-blocked: true
+  # 头顶被挡：目标在上方、而自己头顶那一格被方块压着时，先挖掉它再继续往上垫 / 搭。
+  # 只有“主手确实拿着镐子”的怪物才会走这条路；没镐子的会改用“换一列垫高”。
+  ceiling-blocked: true
+  # 主动挖掉目标（通常是玩家）脚下的方块，让站在高处 / 掩体后的目标掉下来。
+  # 只在目标至少比怪物高 0.5 格时出手，避免平地追击时乱挖。
+  dig-under-target: true
+  # 目标在下方时，挖掉**自己脚下**那一格，掉下去继续靠近（一格一格往下挖）。
+  # 只在目标比自己低至少 1.5 格、且水平 3 格以内、自己站在地上、下面第二格不是液体时才挖；
+  # 同样要求主手有镐子。
+  dig-below-self: true
+  # 面前固定范围内出现指定方块时也触发（即使没有挡住视线）。
+  configured-blocks:
+    enabled: false
+    blocks: []
+
+# 挖掘被中断 / 目标失效 / 任务停滞后的重试冷却（秒），防止每 tick 重试把怪物钉住。
+retry-seconds: 1.5
+
+# 挖掘过程的表现。
+feedback:
+  # 给附近玩家显示方块破坏裂纹进度（Player#sendBlockDamage）。
+  progress-viewers: true
+  progress-radius: 32.0
+  # 粒子反馈。
+  particles: true
+  # 粒子类型（Particle 名称，需支持方块数据；默认 BLOCK）。
+  particle: BLOCK
+  particle-count: 4
+  # 音效反馈。
+  sounds: true
+  hit-sound: BLOCK_STONE_HIT
+  break-sound: BLOCK_STONE_BREAK
+  # 每隔多少 tick 播放一次命中音效（与进度推进节奏独立）。
+  sound-interval: 10
+
+# 挖完一个方块后的冷却（秒），冷却期内不再触发挖掘。
+cooldown-seconds: 8.0
+
+# 是否产生掉落物。默认 false（防止刷物品）。
+drop-items: false
+
+# 安全限制。
+safety:
+  # 禁止挖掘方块实体（箱子、刷怪笼、告示牌、熔炉等）。
+  disallow-tile-entities: true

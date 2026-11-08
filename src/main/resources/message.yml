@@ -1,0 +1,216 @@
+# ============================================================
+#  MobInteract - message.yml
+#  所有发给玩家的文本（目前是 /mobinteract status|inspect|reload 的输出）。
+#  控制台日志（plugin.getLogger）不在这里，仍在代码里。
+#
+#  写法：
+#   - 颜色码用 &，例如 '&7世界筛选：&f挖掘=...'，读取时自动转成 Minecraft 的分节符
+#     （0x00A7，也就是聊天里常见的那个颜色符号）。
+#     只有 & 后面跟合法代码字符（0-9a-fk-or，小写）才会转换，
+#     正文里单独出现的 & 会原样保留。
+#   - 占位符用 {名字}（如 {count}），用 String#replace 逐个替换，
+#     所以文本里可以直接写 %，不会走 String.format。
+#     每条消息上方的注释写着它支持哪些占位符。
+#   - 任何一条消息都可以写成 YAML 列表（每个 - 一行），按顺序逐行发送；
+#     例如想把 /status 的某一行拆成两行，把它改成列表即可：
+#       header:
+#         - '&8&m--------&r &bMobInteract &8&m--------'
+#         - '&7第二行'
+#   - 删掉某个键不会报错：会回退到 jar 内置默认值，并在控制台告警一次。
+#   - 修改后可用 /mobinteract reload 热重载（会一起重读那三个行为配置）。
+#   - 注意别把键名写成 YAML 的布尔值（on / off / yes / no 之类），
+#     它们会被解析成 true / false，所以这里的状态词键带 -text 后缀。
+# ============================================================
+
+command:
+
+  # ------------------------------------------------------------
+  #  通用片段：命令的权限 / 用法提示，以及各种状态词。
+  #  下面的 status / inspect 消息会引用这些词。
+  # ------------------------------------------------------------
+  common:
+
+    # 没有 mobinteract.admin 权限时的提示。无占位符。
+    no-permission: '&c你没有权限使用该命令。'
+
+    # 子命令写错时的用法提示。占位符：{label} = 实际输入的命令（含别名）。
+    usage: '&e用法：/{label} <reload|status|inspect>'
+
+    # 只能由玩家执行的子命令被控制台执行时的提示。无占位符。
+    player-only: '&c该子命令只能由玩家执行。'
+
+    # 总开关（挖掘 / 放置的 enabled）为 true 时的状态词。无占位符。
+    enabled: '开启'
+
+    # 总开关为 false 时的状态词。无占位符。
+    disabled: '关闭'
+
+    # 布尔开关为 true 时的状态词。无占位符。
+    on-text: '开'
+
+    # 布尔开关为 false 时的状态词；也用于“这一项没启用”的占位。无占位符。
+    off-text: '关'
+
+    # 是否类字段为 true 时的状态词。无占位符。
+    yes-text: '是'
+
+    # 是否类字段为 false 时的状态词。无占位符。
+    no-text: '否'
+
+    # “没有值”的占位（没有镐子、没有最近行为）。无占位符。
+    none: '无'
+
+    # 方块存在时间为永久（block-lifetime-seconds: 0）时的显示。无占位符。
+    forever: '永久'
+
+    # 挖掘速度系数 <= 0 时的显示。无占位符。
+    unmineable: '不可挖掘'
+
+    # 背包已经判定过时显示。无占位符。
+    decided: '已判定'
+
+    # 背包还没有判定时显示。无占位符。
+    undecided: '未判定'
+
+  # ------------------------------------------------------------
+  #  /mobinteract status 的每一行（按文件顺序发送）
+  # ------------------------------------------------------------
+  status:
+
+    # 状态页标题栏。无占位符。
+    header: '&8&m--------&r &bMobInteract &8&m--------'
+
+    # 世界筛选 / 生物筛选摘要里的片段。
+    filter:
+
+      # 世界筛选白名单为空时的摘要片段。无占位符。
+      world-all: '全部世界'
+
+      # 生物筛选写了通配符 "*" 时的摘要片段。无占位符。
+      mob-all: '全部生物'
+
+      # 生物筛选留空（用默认人形集合）时的摘要片段。无占位符。
+      mob-default: '默认人形'
+
+      # 摘要里的白名单条目数。占位符：{count} = 白名单里的数量。
+      whitelist: '白名单({count})'
+
+      # 摘要里拼在白名单片段后面的黑名单后缀。占位符：{count} = 黑名单里的数量。
+      blacklist-suffix: ' 黑名单({count})'
+
+    # 世界筛选一行。占位符：{mining} = 挖掘的世界筛选摘要，{placement} = 放置的世界筛选摘要。
+    world-filter: '&7世界筛选：&f挖掘={mining} &7放置={placement}'
+
+    # 生物筛选一行。占位符：{mining} = 挖掘的生物筛选摘要，{placement} = 放置的生物筛选摘要。
+    mob-filter: '&7生物筛选：&f挖掘={mining} &7放置={placement}'
+
+    # 挖掘总览一行。占位符：{enabled} = 开启/关闭，{multiplier} = 默认倍率，{maxDistance} = 距离上限，
+    # {cooldown} = 冷却秒数，{drop} = 掉落开关（开/关）。
+    mining: '&7挖掘：&f{enabled} &7倍率=&f{multiplier} &7最大距离=&f{maxDistance} &7冷却=&f{cooldown}s &7掉落=&f{drop}'
+
+    # 触发器一行。占位符：{pathBlocked} = 寻路受阻触发（true/false），{blocks} = 指定方块数量或“关”。
+    trigger: '&7触发：&f阻挡={pathBlocked} &7指定方块={blocks}'
+
+    # 工具一行。占位符：{requirePickaxe} = 是否要求主手持镐，{giveChance} = 自带镐子概率或“关”，
+    # {dropChance} = 发放镐子的掉落概率，{multiplier} = 木镐基准倍率，{handSpeed} = 空手速度系数。
+    tool: '&7工具：&f需持镐={requirePickaxe} &7自带镐子 &f{giveChance} &7镐掉落=&f{dropChance} &7木镐倍率=&f{multiplier} &7空手系数=&f{handSpeed}'
+
+    # 放置总览一行。占位符：{enabled} = 开启/关闭，{backpackChance} = 背包概率，
+    # {totalMin} / {totalMax} = 方块总量区间，{kindsMin} / {kindsMax} = 方块种类区间。
+    placement: '&7放置：&f{enabled} &7背包概率=&f{backpackChance} &7总量=&f{totalMin}-{totalMax} &7种类=&f{kindsMin}-{kindsMax}'
+
+    # 放置上限一行。占位符：{maxPerChase} = 单次追击次数上限，{lifetime} = 方块存在时间，{entries} = 条目数。
+    limits: '&7放置上限：&f{maxPerChase} 次/追击 &7存在时间=&f{lifetime} &7条目=&f{entries}'
+
+    # 方块存在时间大于 0 时的片段。占位符：{seconds} = 秒数。
+    lifetime-seconds: '{seconds}s'
+
+    # 搭路策略一行与行内片段。
+    strategy:
+
+      # 搭路策略一行。占位符：{stair} = 楼梯策略片段，{pillar} = 垫高开关（开/关），
+      # {farHeight} = 远距离垫高阈值，{nearDistance} = 近距离垫高距离，{bridge} = 搭桥策略片段。
+      line: '&7搭路策略：&f{stair} &7垫高=&f{pillar}(高≥{farHeight}/近≤{nearDistance}) &7横桥=&f{bridge}'
+
+      # 允许搭楼梯时的片段。占位符：{distance} = 搭楼梯的最小横向距离。
+      stair: '楼梯≥{distance}格'
+
+      # 关闭搭楼梯时的片段。无占位符。
+      stair-off: '楼梯=关'
+
+      # 允许搭桥时的片段。占位符：{max} = 搭桥最大长度。
+      bridge: '上限{max}'
+
+    # 拾取一行与行内片段。
+    pickup:
+
+      # 拾取一行。占位符：{range} = 半径/靠近距离片段或“关”，{blocks} = 捡方块（开/关），
+      # {pickaxes} = 捡镐子（开/关）。
+      line: '&7拾取：&f{range} &7方块=&f{blocks} &7镐子=&f{pickaxes}'
+
+      # 拾取开启时的半径片段。占位符：{radius} = 搜索半径，{reach} = 真正捡起的距离。
+      range: '半径{radius} 格/靠近{reach} 格'
+
+    # 出生装备一行（两种写法：没有 / 有按世界覆盖）。
+    equip:
+
+      # 没有按世界覆盖（equip.yml 的 worlds 为空）时的出生装备行。占位符：{percent} = 概率百分数。
+      global: '&7出生装备：&f{percent}%（全局）'
+
+      # 有按世界覆盖时的出生装备行。占位符：{percent} = 全局概率百分数，{worlds} = 覆盖的世界数量。
+      override: '&7出生装备：&f{percent}% &7按世界覆盖=&f{worlds} 个'
+
+    # 运行期计数一行。占位符：{mobs} = 已知怪物数，{mining} = 正在挖掘数，{pillars} = 累计垫高格数，
+    # {tempBlocks} = 临时方块数，{protections} = 保护区判定数。
+    runtime: '&7已知怪物状态=&f{mobs} &7正在挖掘=&f{mining} &7垫高=&f{pillars} &7临时方块=&f{tempBlocks} &7保护区判定=&f{protections}'
+
+    # BlockLocker 兼容状态。占位符：{state} = 已接入 / 未安装。
+    blocklocker: '&7BlockLocker 保护：&f{state}'
+
+  # ------------------------------------------------------------
+  #  /mobinteract inspect 的每一行（按文件顺序发送）
+  # ------------------------------------------------------------
+  inspect:
+
+    # 怪物标题栏。占位符：{mob} = 实体类型（如 ZOMBIE）。
+    header: '&8&m--------&r &b{mob}&r &8&m--------'
+
+    # 准星 16 格内没有可查看的怪物。无占位符。
+    no-mob: '&e视线内没有怪物（把准星对准 16 格内的怪物再试）。'
+
+    # 怪物还没被本插件接管（没有运行期状态）。无占位符。
+    no-profile: '&7该怪物还没有运行期状态（可能未被本插件接管）。'
+
+    # 冷却剩余。占位符：{mining} = 挖掘冷却剩余秒数，{placement} = 放置冷却剩余秒数。
+    cooldowns: '&7挖掘冷却剩余：&f{mining}s &7放置冷却剩余：&f{placement}s'
+
+    # 本次追击已放置次数。占位符：{count} = 次数。
+    placements: '&7单次追击已放置：&f{count}'
+
+    # 手持工具与速度。占位符：{pickaxe} = 主手镐子材质或“无”，{speed} = 挖掘速度系数或“不可挖掘”，
+    # {granted} = 是否插件发放（是/否）。
+    tool: '&7主手镐子：&f{pickaxe} &7挖掘速度系数：&f{speed} &7插件发放：&f{granted}'
+
+    # 最近一次行为与垫高格数。占位符：{status} = 最近行为文本或“无”，{pillarSteps} = 竖直垫高格数。
+    status: '&7最近行为：&f{status} &7竖直垫高：&f{pillarSteps} 格'
+
+    # 背包为空。占位符：{state} = 已判定/未判定。
+    backpack-none: '&7方块背包：&f无（{state}）'
+
+    # 背包汇总。占位符：{kinds} = 方块种类数，{total} = 方块总数。
+    backpack: '&7方块背包：&f{kinds} 种 / {total} 个'
+
+    # 背包里的一个条目（每个条目发送一次）。占位符：{id} = 条目 id，{type} = 条目类型（BLOCK/TNT/FLUID），
+    # {count} = 该条目的数量。
+    backpack-entry: '&8 - &f{id} &7({type}) × {count}'
+
+  # ------------------------------------------------------------
+  #  /mobinteract reload 的回话
+  # ------------------------------------------------------------
+  reload:
+
+    # 重载成功。占位符：{count} = 当前生效的消息条数（message.yml 里的键数量）。
+    success: '&aMobInteract 配置已重载（不打断进行中的行为）。已加载消息 {count} 条。'
+
+    # 重载失败（详细堆栈在控制台）。无占位符。
+    failed: '&c配置重载失败，详见控制台日志。'

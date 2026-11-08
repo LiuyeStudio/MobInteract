@@ -1,0 +1,179 @@
+# ============================================================
+#  MobInteract - placement.yml
+#  人形怪物“放置方块 / 搭路（楼梯 · 垫高 · 搭桥）/ 拾取物品”行为配置
+#  运行目标：Folia / Paper / Purpur / Canvas 1.21.8 ~ 26.x（同一个 jar）
+#  修改后可用 /mobinteract reload 热重载。
+# ============================================================
+
+# 配置结构版本（插件用它在旧文件上做自动迁移，请勿改小）。
+#  1 = 旧版（step-up 台阶、max-per-chase: 10）
+#  2 = 当前版本（楼梯 / 垫高 / 搭桥三选一、拾取、max-per-chase: 32）
+config-version: 2
+
+# 总开关。false 时怪物不会放置任何东西。
+enabled: true
+
+# 世界筛选（放置）。留空 = 所有世界；填白名单则只在这些世界生效，黑名单优先。
+worlds:
+  whitelist: []
+  blacklist: []
+
+# 生物筛选（放置）。留空 = 所有默认人形怪物；
+# 填具体类型可自定义接管其他生物，例如 [ZOMBIE, IRON_GOLEM]；
+# 写 mob-whitelist: ["*"] 表示全部生物；mob-blacklist 优先级最高。
+mob-whitelist: []
+mob-blacklist: []
+
+# 怪物“方块背包”。
+backpack:
+  # 每个怪物拥有背包的概率（0.0 - 1.0）。未获得背包的怪物永远不会放置方块。
+  # 注意：该概率与 mining.yml 的 tool.give.chance 是相乘关系，
+  # 想让“既带方块又能挖”的怪物更多，两边都要调高。
+  chance: 0.65
+  # 背包总方块数量范围（闭区间）。实际数量还会被“种类数”截断。
+  total:
+    min: 6
+    max: 20
+  # 背包中方块种类数量范围（闭区间）。
+  # 先随机种类数，再从下面的条目里按权重“无放回”抽样，最后把总数随机分配到各种类上。
+  kinds:
+    min: 1
+    max: 4
+
+# 可放置条目。每个条目必须唯一 id；weight 为被抽中/被选中的相对权重。
+# 默认只包含普通自然方块与低价值方块，不含钻石块、下界合金块等高价值方块，
+# 也**不含沙子 / 沙砾这类受重力影响的方块**（它们会塌，搭出来的桥 / 柱子立不住）。
+# type 支持三种：
+#   block  - 普通方块，用 material（+ 可选 block-data）放置
+#   tnt    - 直接生成已点燃的 TNT 实体（不会先放 TNT 方块）
+#   fluid  - 倾倒流体（WATER / LAVA），consume-bucket 决定是否扣除条目
+entries:
+  - id: cobblestone
+    type: block
+    weight: 30
+    material: COBBLESTONE
+  - id: dirt
+    type: block
+    weight: 22
+    material: DIRT
+  - id: stone
+    type: block
+    weight: 18
+    material: STONE
+  - id: andesite
+    type: block
+    weight: 14
+    material: ANDESITE
+  - id: oak_planks
+    type: block
+    weight: 8
+    material: OAK_PLANKS
+  - id: netherrack
+    type: block
+    weight: 6
+    material: NETHERRACK
+  - id: tnt
+    type: tnt
+    weight: 3
+    # 放置后直接生成已点燃的 TNT 实体，并设置引信时长（tick，20 tick = 1 秒）。
+    fuse-ticks: 60
+  - id: lava_bucket
+    type: fluid
+    weight: 2
+    fluid: LAVA
+    # 倾倒后是否消耗该条目。默认 true：水/熔岩桶只放一次，放完连桶一起从背包消失；
+    # 设为 false 则桶被“回收”，同一个桶可以反复倾倒。
+    consume-bucket: true
+  - id: water_bucket
+    type: fluid
+    weight: 4
+    fluid: WATER
+    consume-bucket: true
+
+# 放置行为参数。
+placement:
+  # 怪物到放置位置的最大距离（格）。require-adjacent 为 true 时以“邻接”为准，本项仅作上限。
+  max-distance: 4.0
+  # 放置位置必须紧挨着怪物（禁止隔空放置）：水平 ±1 格、竖直 ±1 格以内。
+  # 设为 false 时退回按 max-distance 判断。
+  require-adjacent: true
+  # 放置前怪物必须面向放置位置，允许的最大夹角（度）。超出时先转头再重试，
+  # 多次仍转不过去就取消这次放置（条目退回背包）。
+  max-facing-angle: 60
+  # 单次追击内最多放置次数（目标变化或丢失后重置）。楼梯 / 垫高 / 搭桥都是“一格一次”，
+  # 所以这一项要比背包库存（默认 6-20）宽一点，否则会在桥/柱子搭到一半时停手。
+  max-per-chase: 32
+  # 每次放置后的冷却（秒）。建路（楼梯 / 垫高 / 桥面）是连续动作，每格之间只等约 0.2 秒，
+  # 不套用这一项；只有 TNT / 水桶 / 熔岩桶这类功能方块用这个冷却。
+  cooldown-seconds: 3.0
+  # “短搭建进度”：选中条目到真正放置之间的延迟（tick），用于表现动作。
+  build-delay-ticks: 6
+  # 判定“垂直落差”的最小高度差（格）。追击目标低于该值时触发下潜放置。
+  vertical-drop: 1.5
+  # 放置的方块多久后自动消失（秒）。默认 15 秒，0 = 永久。
+  # 到期由全局清扫器（每 20 tick 一次）在方块所在区域移除，并会再次比对方块类型，
+  # 避免误删玩家后来放的方块；区块没加载会延后 5 秒重试，不会漏。
+  # 注意：调得太小的话，怪物还在桥上走、身后的方块就开始消失了
+  # （一段 20 格的桥约 10 秒铺完，15 秒刚好够；更长的桥建议调大这一项）。
+  # TNT 与流体也按此规则清理（TNT 爆炸后自然消失）。
+  block-lifetime-seconds: 15
+  # 高处目标的搭路策略（三种，按“横向多远、高度多高”自动选）：
+  #   横向距离 ≥ stair-min-distance 且高度没到 pillar-far-height → 搭楼梯（每级同时前进一格、抬高一级）
+  #   高度差 ≥ pillar-far-height，或横向距离 ≤ pillar-near-distance → 原地垫高（楼梯会一路冲过头）
+  #   其余情况 → 先垫高到目标高度，再横向搭桥
+  # 垫高时会先找一列“整列没有其它生物、上下净空、头顶不被挡死”的空列再往上垫，
+  # 不再往前后左右乱放方块。
+  #
+  # 高处目标是否允许朝目标搭楼梯（一级同时前进一格、抬高一级）。
+  stair-up: true
+  # 横向距离 ≥ 该值时优先搭楼梯（格）。
+  stair-min-distance: 4.0
+  # 高处目标是否允许原地垫高。只高 1 格的一律交给原版跳跃。
+  # 关闭后高处目标只剩“搭楼梯 / 搭桥”两种方式。
+  pillar-up: true
+  # 单次追击内竖直垫高的最大格数（默认 16，0 = 不限制；防止一路垫上天）。
+  pillar-up-max-height: 16
+  # 高度差 ≥ 该值时一律改用垫高，不搭楼梯（格）。
+  pillar-far-height: 8
+  # 横向距离 ≤ 该值时一律原地垫高，不搭楼梯（格）。必须小于 stair-min-distance。
+  pillar-near-distance: 2.0
+  # 是否允许朝目标横向搭桥（跨越沟壑 / 从垫高列走到目标所在位置）。
+  bridge: true
+  # 离目标超过这么多格就不再搭桥 / 搭楼梯，避免追很远的目标时铺一条长天桥。
+  bridge-max-length: 24
+  # 挑选“垫高列”时的水平搜索半径（格）：0 = 只考虑自己脚下这一列。
+  # 目标站在柱子 / 屋顶上时，自己这一列会被挡住，怪物会在这个半径内找一列空的走过去垫。
+  lane-search-radius: 3
+  # 上升前先侦察：原版寻路能到就直接走，附近有台阶 / 坡道就绕上去，都没有才搭方块。
+  # 开启后怪物不会一看到玩家在头顶就呆在正下方垂直垫高。
+  smart-ascend: true
+  # 带方块的怪物挤在一起时主动让位，避免多只怪叠在同一格上谁也放不了方块。
+  spread-crowd: true
+  # 判定“挤在一起”的距离（格）：与另一只带方块的怪物中心距离小于该值就让位 / 暂停放置。
+  spacing-radius: 1.0
+  # 功能方块（TNT / 水桶 / 熔岩桶）只放在目标（玩家）脚下，不用于搭桥 / 垫高。
+  # 关闭后这些条目和普通方块一样可以用于搭路。
+  special-only-under-target: true
+  # 目标在自己上方却“没有索敌”时（例如玩家悬停、或玩家在创造模式），
+  # 主动锁定上方 16 格内可见的生存/冒险模式玩家，好让垫高逻辑生效。
+  vertical-aggro: true
+  # 放置被拒绝 / 失败后的重试冷却（秒），避免每 tick 重试把怪物卡住。
+  retry-seconds: 1.5
+
+# 主动拾取地上的物品（掉落物）。
+# 捡到的方块会记进“方块背包”（没有背包的怪物会现建一个空的），捡到的镐子换到主手。
+pickup:
+  enabled: true
+  # 搜索半径（格）：这个范围内的掉落物才会被注意到。
+  radius: 8.0
+  # 走到这个距离内就真正捡起来（格）。必须小于 radius。
+  reach: 1.8
+  # 是否拾取可放置的方块（自动加入方块背包，之后就能拿它搭路）。
+  blocks: true
+  # 是否拾取镐子（主手空着时才换；捡到的镐子仍会按原版规则掉落，不会变成“不掉落”）。
+  pickaxes: true
+  # 只有通过 equip.yml 闸门的怪物才允许拾取（默认 true）。
+  # 因为“捡来的方块 / 镐子”同样算“带装备”，不加这条限制的话，
+  # “带镐子 + 带方块”的怪物比例就会超过 equip.yml 里配置的 10%。
+  # 想让所有怪都能捡东西，改成 false（比例限制随之失效）。
+  only-equipped: true

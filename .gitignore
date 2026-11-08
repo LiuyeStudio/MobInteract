@@ -1,16 +1,4 @@
-# ============================================================
-# 本仓库只公开文档与发布页。
-# 源码、构建脚本与开发资料保留在本地，但不纳入版本管理。
-# ============================================================
-/src/
-/pom.xml
-/.github/
-/docs/
-/run/
-/server/
-/plugins/
-
-# ---- 本地构建产物 ----
+# ---- 构建产物 ----
 target/
 classes/
 *.class
@@ -22,6 +10,9 @@ dependency-reduced-pom.xml
 pending-blocks.txt
 
 # ---- 本地测试服务端 ----
+/run/
+/server/
+/plugins/
 logs/
 world/
 world_nether/

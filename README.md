@@ -47,7 +47,7 @@ The command is `/mobinteract`, alias `/mi`, permission node `mobinteract.admin` 
 | --- | --- |
 | `/mobinteract status` | Configuration summary: mob / world filters, mining parameters, build limits, equipment chance, known mobs, temporary blocks, protection-plugin status |
 | `/mobinteract inspect` | Live state of the mob you are looking at: cooldown, placements used in this chase, pickaxe in hand, stock contents, last action (the first thing to check when a mob "just won't move") |
-| `/mobinteract reload` | Hot-reloads every configuration file without interrupting an ongoing mining or building action |
+| `/mobinteract reload` | Hot-reloads every configuration file; mobs already in the world re-roll their equipment gate and stock, so the change applies immediately instead of after a restart |
 | `/mobinteract update` | Checks GitHub Releases for a newer version right away (the plugin also does this on its own in the background) |
 
 ## Configuration at a glance
@@ -83,6 +83,7 @@ Every key, default value and tuning advice lives in the wiki, one page per topic
 - **"Why is the bridge still there / gone already?"** — Placed blocks vanish after 15 seconds by default; a mob standing on top re-arms the timer. Set it to 0 to keep them forever.
 - **"Why doesn't it chase me?"** — Vanilla pathfinding will not dig through a wall it cannot see you behind, unless you enable "mine the block in front" or it is actively chasing (`targeting.yml` can make it fixate on a nearby player).
 - **"Why do villagers do nothing?"** — Friendly mobs are not taken over by default; that is a feature, not a bug.
+- **"Why won't it pick up that diamond block?"** — Pickup is limited to blocks listed in `placement.yml` → `entries` (plus the plain "placeable block" check). Anything else would end up in a stock that expires after 15 seconds, i.e. be destroyed.
 
 More troubleshooting in [FAQ and Known Limitations](https://github.com/LiuyeStudio/MobInteract/wiki/FAQ).
 

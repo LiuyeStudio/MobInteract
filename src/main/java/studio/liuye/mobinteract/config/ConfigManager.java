@@ -206,7 +206,14 @@ public final class ConfigManager {
 
         double multiplier = clampDouble(config.getDouble("break-time.multiplier", 4.0D), 0.01D, 10_000.0D);
         double minSeconds = clampDouble(config.getDouble("break-time.min-seconds", 0.2D), 0.0D, 600.0D);
-        double hardCapSeconds = clampDouble(config.getDouble("break-time.hard-cap-seconds", 180.0D), 0.05D, 3600.0D);
+        // 0 或负数 = 不设上限：早期版本把它夹成 0.05 s，结果所有方块（哪怕是泥土）都“挖不动”，
+        // 服主写 0 想要“什么都能挖”，却得到一个什么都不挖的插件。
+        double hardCapSeconds = config.getDouble("break-time.hard-cap-seconds", 180.0D);
+        if (hardCapSeconds <= 0.0D) {
+            hardCapSeconds = Double.MAX_VALUE;
+        } else {
+            hardCapSeconds = clampDouble(hardCapSeconds, 0.05D, 3_600.0D);
+        }
         int tickInterval = clampInt(config.getInt("break-time.tick-interval", 2), 1, 20);
 
         Set<Material> disabled = parseMaterials(config.getStringList("materials.disabled"), MINING_FILE + "/materials.disabled");
@@ -339,7 +346,15 @@ public final class ConfigManager {
         MobFilter mobFilter = parseMobFilter(config, PLACEMENT_FILE);
         WorldFilter worldFilter = parseWorldFilter(config, PLACEMENT_FILE);
 
-        double chance = clampDouble(config.getDouble("backpack.chance", 0.65D), 0.0D, 1.0D);
+        // 文档写的是 0.0 - 1.0；但按百分数写 65 是很容易犯的错，直接夹成 1.0 会让人觉得
+        // “我明明只写了 65，怎么全都有背包”。这里把 1 < x <= 100 当作百分数换算，并留一条日志。
+        double chance = config.getDouble("backpack.chance", 0.65D);
+        if (chance > 1.0D && chance <= 100.0D) {
+            plugin.getLogger().warning(PLACEMENT_FILE
+                    + "：backpack.chance = " + chance + " 超出 0.0 - 1.0，已按百分数处理（= " + (chance / 100.0D) + "）");
+            chance /= 100.0D;
+        }
+        chance = clampDouble(chance, 0.0D, 1.0D);
         int totalMin = clampInt(config.getInt("backpack.total.min", 6), 0, 256);
         int totalMax = clampInt(config.getInt("backpack.total.max", 20), 0, 256);
         if (totalMax < totalMin) {
@@ -373,7 +388,16 @@ public final class ConfigManager {
                 clampDouble(config.getDouble("placement.cooldown-seconds", 3.0D), 0.0D, 3600.0D) * 1000.0D);
         int buildDelayTicks = clampInt(config.getInt("placement.build-delay-ticks", 6), 0, 200);
         double verticalDrop = clampDouble(config.getDouble("placement.vertical-drop", 1.5D), 0.0D, 64.0D);
-        int lifetime = clampInt(config.getInt("placement.block-lifetime-seconds", 15), 0, 86_400);
+        // 0 = 永久（文档就是这么写的）。负数则是写错了：早期版本把它夹成 0，等于“永久”，
+        // 与服主的本意（几乎肯定是“短一点”）正好相反，于是方块永久堆在地图上。负数按 1 秒处理。
+        int lifetime = config.getInt("placement.block-lifetime-seconds", 15);
+        if (lifetime < 0) {
+            plugin.getLogger().warning(PLACEMENT_FILE
+                    + "：placement.block-lifetime-seconds 不能为负，已按 1 秒处理（写 0 才是永久）");
+            lifetime = 1;
+        } else if (lifetime > 86_400) {
+            lifetime = 86_400;
+        }
         boolean pillarUp = config.getBoolean("placement.pillar-up", true);
         int pillarUpMaxHeight = clampInt(config.getInt("placement.pillar-up-max-height", 16), 0, 256);
         boolean stairUp = config.getBoolean("placement.stair-up", true);

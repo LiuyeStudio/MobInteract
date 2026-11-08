@@ -359,7 +359,7 @@ public final class MiningGoal implements Goal<Mob> {
                 if (bodyStillMatches(block, target)
                         && BlockSafety.canBreak(block, plugin.settings().mining())
                         && plugin.canChange(block, mob, MobBlockChangeEvent.Action.BREAK)) {
-                    success = plugin.breakBlock(block);
+                    success = plugin.breakBlock(block, mob);
                 }
             } catch (Throwable throwable) {
                 plugin.getLogger().log(Level.WARNING, "移除目标方块失败", throwable);

@@ -3,10 +3,13 @@ package studio.liuye.mobinteract;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Mob;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import studio.liuye.mobinteract.ai.GoalManager;
 import studio.liuye.mobinteract.ai.MiningGoal;
@@ -18,6 +21,7 @@ import studio.liuye.mobinteract.config.Settings;
 import studio.liuye.mobinteract.listener.MobLifecycleListener;
 import studio.liuye.mobinteract.message.Messages;
 import studio.liuye.mobinteract.mining.MiningFeedback;
+import studio.liuye.mobinteract.mining.MiningTool;
 import studio.liuye.mobinteract.mining.PickaxeService;
 import studio.liuye.mobinteract.mob.MobRegistry;
 import studio.liuye.mobinteract.placement.CrowdGuard;
@@ -178,6 +182,13 @@ public final class MobInteractPlugin extends JavaPlugin {
             // 重新排检查任务：改间隔、临时关掉再打开都能立刻生效。
             updateChecker.start();
         }
+        // 已经在世界里的怪不会自己重读配置：它们的「出生装备闸门」「背包」「本次追击的放置计数」
+        // 都记在 MobProfile 上，而这是按 UUID 建的一次性状态。旧实现在 reload 之后，
+        // 已经生成的怪继续按旧配置行动——服主改完 mining.yml 进游戏一看“没反应”，
+        // 只能重启服务端。这里直接清空档案，让每只怪下一次 tick 重新建档、按新配置重新掷骰。
+        // 代价：没有存档包袱的那部分状态（背包里还没放出去的方块、临时冷却）会重置，
+        // 换来的是一句“reload 立即生效”确实成立。
+        registry.clear();
     }
 
     public MobRegistry registry() {
@@ -276,20 +287,60 @@ public final class MobInteractPlugin extends JavaPlugin {
     /**
      * 按配置挖掉一个方块。
      *
-     * <p>默认不产生掉落物（防止刷物品）；只有配置显式开启 {@code drop-items} 时才走
-     * {@code breakNaturally()}。必须在方块所在区域的线程上调用。</p>
+     * <p>三件事按顺序做：</p>
+     * <ol>
+     *   <li>先触发一次 {@link BlockBreakEvent}（玩家为 {@code null}，表示非玩家破坏），
+     *       让 WorldGuard / GriefPrevention / CoreProtect 这类插件能看见、能拦截、能记日志——
+     *       否则怪物挖方块等于绕过整个保护体系；</li>
+     *   <li>{@code drop-items} 打开时用怪物手里的镐子结算掉落（空手结算石头类方块是零掉落，
+     *       等于白开了这个开关）；</li>
+     *   <li>否则直接置为空气（默认行为，不掉任何东西，杜绝刷物品）。</li>
+     * </ol>
      *
+     * <p>必须在方块所在区域的线程上调用。</p>
+     *
+     * @param block 目标方块
+     * @param mob   发起破坏的怪物，可为 {@code null}（没有来源时按空手处理）
      * @return true 表示方块已被移除
      */
-    public boolean breakBlock(Block block) {
+    public boolean breakBlock(Block block, Mob mob) {
+        if (block == null || block.getType().isAir()) {
+            return false;
+        }
+        if (!fireBlockBreakEvent(block)) {
+            return false;
+        }
         MiningSettings settings = settings().mining();
         if (settings.dropItems()) {
-            return block.breakNaturally();
-        }
-        if (block.getType().isAir()) {
-            return false;
+            Material pickaxe = mob == null ? null : MiningTool.heldPickaxe(mob);
+            ItemStack tool = pickaxe == null ? new ItemStack(Material.AIR) : new ItemStack(pickaxe);
+            return block.breakNaturally(tool);
         }
         block.setBlockData(Material.AIR.createBlockData(), true);
         return true;
+    }
+
+    /**
+     * 触发 {@link BlockBreakEvent}，返回“是否允许破坏”。
+     *
+     * <p>玩家传 {@code null}：BlockBreakEvent 的约定是“谁挖的”，怪物挖矿没有玩家主体。
+     * 少数插件会直接对 {@code getPlayer()} 取值而抛异常，所以这里把整个调用包在 try/catch 里，
+     * 出错时按“未取消”继续——保护插件自身的 bug 不该让怪物彻底不能挖方块。</p>
+     */
+    private boolean fireBlockBreakEvent(Block block) {
+        BlockBreakEvent event;
+        try {
+            event = new BlockBreakEvent(block, null);
+        } catch (Throwable throwable) {
+            // 某些版本对 null 玩家有额外校验：拿不到事件就退化成“不通知”，不阻断破坏。
+            return true;
+        }
+        try {
+            getServer().getPluginManager().callEvent(event);
+        } catch (Throwable throwable) {
+            getLogger().log(Level.FINE, "BlockBreakEvent 处理时出错（已忽略，按未拦截处理）", throwable);
+            return true;
+        }
+        return !event.isCancelled();
     }
 }

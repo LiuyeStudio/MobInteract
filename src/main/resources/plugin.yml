@@ -1,7 +1,12 @@
 name: MobInteract
-version: '${project.version}'
+# 这里写的是**字面量**，故意不用 ${...} 占位符：
+# 占位符只有在 Maven 资源过滤开启时才会被替换，一旦有人直接用 javac / jar 打包，
+# 或者拿到的是没带 pom 的源码包，api-version 就会以占位符原文进 jar，
+# 服务端解析时抛 NumberFormatException，插件根本不加载。写死更稳。
+# 发版时与 pom.xml 的 <version> 一起改这一行。
+version: '1.4.0'
 main: studio.liuye.mobinteract.MobInteractPlugin
-api-version: '${plugin.api-version}'
+api-version: '1.21.8'
 # Folia 只在描述文件声明该字段时才允许加载插件（Paper 会忽略它）。
 folia-supported: true
 # BlockLocker 软依赖：装了它就先加载它，本插件启动时才解析得到它的保护 API
@@ -9,7 +14,7 @@ folia-supported: true
 softdepend: [BlockLocker]
 authors: [liuye]
 description: 人形怪物挖掘方块、搭桥下潜的 Folia / Paper 插件（1.21.8 ~ 26.x）。
-website: https://studio.liuye
+website: https://github.com/LiuyeStudio/MobInteract
 
 commands:
   mobinteract:

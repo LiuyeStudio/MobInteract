@@ -40,6 +40,9 @@ public final class PickedItems {
      * <p>实现依赖 {@code Material#isBlock()} / {@code isItem()} / {@code hasGravity()}，
      * 这些方法需要初始化服务端的方块注册表，单元测试里跑不了，所以这一条在真实服务端上验证
      * （见 README 的运行验证一节）。</p>
+     *
+     * <p><b>这只是“技术上能不能收”</b>；真正决定“要不要捡”的还有一层白名单，
+     * 见 {@link #canStore(Material, List)}。</p>
      */
     public static boolean canStore(Material material) {
         return material != null
@@ -48,6 +51,32 @@ public final class PickedItems {
                 && material.isItem()
                 && !material.hasGravity()
                 && !BlockSafety.isForbidden(material);
+    }
+
+    /**
+     * 捡到的方块能不能收进背包 —— 加上白名单的完整判断。
+     *
+     * <p>为什么需要白名单：方块背包里的东西是<b>会消失的</b>。放置出去的方块由
+     * {@code TempBlockRegistry} 在存活时间到点后销毁，如果怪物把玩家掉在地上的钻石块、
+     * 下界合金块也“捡”进来，那块方块就再也不会回到玩家手里了——玩家死一次，
+     * 贵重方块被路过的僵尸顺手收走、十五秒后凭空蒸发，这比不捡还糟。</p>
+     *
+     * <p>所以只收<b>怪物自己真放得出去的材质</b>：{@code placement.entries} 里出现过的方块。
+     * 配置里一个方块条目都没写（旧配置 / 全注释掉）时退回旧行为，只做技术性校验。</p>
+     */
+    public static boolean canStore(Material material, List<PlacementEntry> entries) {
+        if (!canStore(material)) {
+            return false;
+        }
+        if (entries == null || entries.isEmpty()) {
+            return true;
+        }
+        for (PlacementEntry entry : entries) {
+            if (entry.type() == EntryType.BLOCK && entry.material() == material) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

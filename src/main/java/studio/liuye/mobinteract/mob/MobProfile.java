@@ -16,6 +16,9 @@ import studio.liuye.mobinteract.placement.BuildLane;
  */
 public final class MobProfile {
 
+    /** 垫高列黑名单的容量上限：满了就整表清空，给旧列重新机会。 */
+    private static final int MAX_REJECTED_LANES = 64;
+
     private final UUID entityId;
 
     private volatile long miningCooldownUntil;
@@ -232,10 +235,22 @@ public final class MobProfile {
         return rejectedLanes;
     }
 
-    /** 记住这一列不能再用（走不过去 / 放不下），本次追击内不再尝试。 */
+    /**
+     * 记住这一列不能再用（走不过去 / 放不下），本次追击内不再尝试。
+     *
+     * <p>黑名单必须能被回收：{@code rejectedLanes} 原本只有在“追击目标变了”时才清空，
+     * 而玩家只要站着不动，每次垫高失败就会拉黑一列——半径 3 一共 49 列，
+     * 按每秒两次的节奏二十多秒就耗光了，之后 {@code chooseLane} 永远返回 null，
+     * 这只怪在整场追击里再也不会垫高，而 {@code /mobinteract inspect} 只会说
+     * “附近没有可以垫高的空列”，服主根本查不出原因。</p>
+     */
     public void rejectLane(BuildLane lane) {
         if (lane == null) {
             return;
+        }
+        if (rejectedLanes.size() >= MAX_REJECTED_LANES) {
+            // 攒满了说明整片区域都试过了：清空重来，给之前失败的列再一次机会。
+            rejectedLanes.clear();
         }
         rejectedLanes.add(lane);
         if (buildLane != null && buildLane.equals(lane)) {

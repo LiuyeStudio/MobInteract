@@ -95,9 +95,10 @@ final class BukkitBuildWorld implements BuildWorld {
                 }
             }
         } catch (Throwable throwable) {
-            // 区域迁移 / 区块卸载期间实体查询可能失败：按“没有生物”处理，
-            // 真正的占用会在放置执行期再校验一次。
-            return false;
+            // 区域迁移 / 区块卸载期间实体查询可能失败。这里<b>按“有生物”处理</b>：
+            // 放不下方块最多是怪物这一轮没铺成路，反过来（当成空位）就会把方块塞进别人身体里，
+            // 玩家会被卡进墙、被活埋——两种代价完全不对等。
+            return true;
         }
         return false;
     }
@@ -120,7 +121,8 @@ final class BukkitBuildWorld implements BuildWorld {
             owned = Bukkit.isOwnedByCurrentRegion(
                     new Location(world, (chunkX << 4) + 8, world.getMinHeight(), (chunkZ << 4) + 8));
         } catch (Throwable throwable) {
-            owned = true;
+            // 判断不了就当作“不是我的区域”：宁可这一轮不规划，也不要在别人的区域里读方块刷堆栈。
+            owned = false;
         }
         ownedChunks.put(key, owned);
         return owned;

@@ -10,6 +10,7 @@ import org.bukkit.entity.Mob;
 import studio.liuye.mobinteract.config.PlacementSettings;
 import studio.liuye.mobinteract.safety.BlockSafety;
 import studio.liuye.mobinteract.util.BlockPos;
+import studio.liuye.mobinteract.util.RegionAccess;
 
 /**
  * 把“要不要放、放哪里”接到 Bukkit 世界上。
@@ -109,7 +110,11 @@ public final class PlacementPlanner {
         if (!withinReach(mobLocation, pos, settings)) {
             return Plan.none("放置位置超出可及范围", nextLane);
         }
-        Block block = pos.block();
+        Block block = RegionAccess.block(pos);
+        if (block == null) {
+            // 区块没加载或不在本区域线程：这一轮直接放弃，绝不去读别人的方块（会刷非法区域访问的堆栈）。
+            return Plan.none("放置位置不属于当前区域", nextLane);
+        }
         if (!BlockSafety.canPlaceAt(block, settings)) {
             return Plan.none("放置位置不能放方块", nextLane);
         }
@@ -141,8 +146,13 @@ public final class PlacementPlanner {
         if (target == null || !target.isValid()) {
             return null;
         }
-        Block pos = target.getLocation().getBlock();
-        BlockPos candidate = BlockPos.of(pos);
+        Location targetLocation = target.getLocation();
+        BlockPos candidate = new BlockPos(targetLocation.getWorld(),
+                targetLocation.getBlockX(), targetLocation.getBlockY(), targetLocation.getBlockZ());
+        Block pos = RegionAccess.block(candidate);
+        if (pos == null) {
+            return null;   // 目标在别的区域 / 区块没加载：这一轮不往它脚下放
+        }
         if (!withinReach(mob.getLocation(), candidate, settings)) {
             return null;
         }

@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
@@ -36,6 +38,9 @@ public final class Messages {
     private static final String COLOR_CODES = "0123456789abcdefklmnor";
 
     private static final char SECTION = '§';
+
+    /** 占位符：{@code {name}}，名字允许字母数字与 {@code . _ -}。 */
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([A-Za-z0-9_.\\-]+)\\}");
 
     private final Plugin plugin;
 
@@ -114,25 +119,34 @@ public final class Messages {
         if (key == null) {
             return List.of(missing("<null>"));
         }
+        // 顺序很重要：先看用户文件里写的是列表还是单行，两者都看过之后才回退内置默认值。
+        // 旧实现先拿内置列表，于是服主把某个多行提示改成一行时，改写会被直接忽略——
+        // 明明文件里改了、游戏里却还是老样子，这种“改了没用”最难排查。
         List<String> list = snapshot.list(key);
-        if (list == null) {
-            list = bundled().list(key);
-        }
         if (list != null) {
-            List<String> lines = new ArrayList<>(list.size());
-            for (String line : list) {
-                lines.add(apply(line, placeholders));
-            }
-            return List.copyOf(lines);
+            return applyAll(list, placeholders);
         }
         String single = snapshot.string(key);
-        if (single == null) {
-            single = bundled().string(key);
+        if (single != null) {
+            return List.of(apply(single, placeholders));
         }
+        list = bundled().list(key);
+        if (list != null) {
+            return applyAll(list, placeholders);
+        }
+        single = bundled().string(key);
         if (single == null) {
             return List.of(missing(key));
         }
         return List.of(apply(single, placeholders));
+    }
+
+    private static List<String> applyAll(List<String> list, Object... placeholders) {
+        List<String> lines = new ArrayList<>(list.size());
+        for (String line : list) {
+            lines.add(apply(line, placeholders));
+        }
+        return List.copyOf(lines);
     }
 
     /** 该键是否可用（当前文件或 jar 内置默认值里有）。 */
@@ -181,20 +195,38 @@ public final class Messages {
         return "<missing:" + key + ">";
     }
 
-    /** 成对替换占位符；不成对的尾部参数会被忽略。 */
+    /**
+     * 成对替换占位符；不成对的尾部参数会被忽略。
+     *
+     * <p><b>一次扫描</b>，不是“逐对 replace 链”：链式替换里如果某个值是 {@code "{url}"}
+     * 这种内容（比如玩家名、URL 恰好带了花括号），它会被后面的某一对再替换一次，
+     * 于是文本里凭空出现别的字段。这里先把成对的键值收进表，再对原文走一遍正则替换，
+     * 替换出来的内容不会再被扫描。</p>
+     */
     private static String apply(String text, Object... placeholders) {
-        if (text == null || placeholders == null || placeholders.length < 2) {
+        if (text == null || placeholders == null || placeholders.length < 2 || text.indexOf('{') < 0) {
             return text;
         }
-        String result = text;
+        Map<String, String> values = new LinkedHashMap<>();
         for (int index = 0; index + 1 < placeholders.length; index += 2) {
             Object name = placeholders[index];
             if (name == null) {
                 continue;
             }
-            result = result.replace("{" + name + "}", String.valueOf(placeholders[index + 1]));
+            values.put(String.valueOf(name), String.valueOf(placeholders[index + 1]));
         }
-        return result;
+        if (values.isEmpty()) {
+            return text;
+        }
+        Matcher matcher = PLACEHOLDER.matcher(text);
+        StringBuilder builder = new StringBuilder(text.length());
+        while (matcher.find()) {
+            String replacement = values.get(matcher.group(1));
+            matcher.appendReplacement(builder,
+                    Matcher.quoteReplacement(replacement != null ? replacement : matcher.group()));
+        }
+        matcher.appendTail(builder);
+        return builder.toString();
     }
 
     /** 把 {@code &} 颜色码转成 {@code §}（只转换后面跟合法代码字符的情况）。 */
@@ -206,7 +238,9 @@ public final class Messages {
         for (int index = 0; index < text.length(); index++) {
             char current = text.charAt(index);
             if (current == '&' && index + 1 < text.length()
-                    && COLOR_CODES.indexOf(text.charAt(index + 1)) >= 0) {
+                    && COLOR_CODES.indexOf(Character.toLowerCase(text.charAt(index + 1))) >= 0) {
+                // 大小写都认：服主写 &A 跟 &a 是同一个颜色，
+                // 旧实现只认小写，于是 &A / &R 会原样糊在游戏里。
                 builder.append(SECTION);
                 continue;
             }

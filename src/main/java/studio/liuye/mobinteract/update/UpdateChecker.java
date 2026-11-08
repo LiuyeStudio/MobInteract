@@ -2,6 +2,7 @@ package studio.liuye.mobinteract.update;
 
 import io.papermc.paper.threadedregions.scheduler.AsyncScheduler;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -35,6 +36,9 @@ public final class UpdateChecker {
 
     /** 能收到更新提醒的权限（与 /mobinteract 管理权限一致）。 */
     public static final String PERMISSION = "mobinteract.admin";
+
+    /** 响应体上限：正常的十个 release 只有几 KB，这个值只是防止异常响应把服务端撑爆。 */
+    private static final int MAX_BODY_BYTES = 512 * 1024;
 
     /** 一次检查的结果类型。 */
     public enum Status {
@@ -84,6 +88,9 @@ public final class UpdateChecker {
     private volatile Result lastResult;
 
     private volatile ScheduledTask scheduled;
+
+    /** 已经提醒过的版本标签：同一版本不再重复提醒（检查是周期性的）。 */
+    private volatile String announcedTag;
 
     /** 同一次检查不并发跑两遍（自动检查与 /mobinteract update 撞车时）。 */
     private final AtomicBoolean running = new AtomicBoolean();
@@ -232,7 +239,7 @@ public final class UpdateChecker {
             }
             String body;
             try (InputStream stream = connection.getInputStream()) {
-                body = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+                body = readBody(stream);
             }
             GitHubRelease release = GitHubRelease.pick(body, current.includePrerelease());
             if (release == null) {
@@ -249,13 +256,42 @@ public final class UpdateChecker {
         }
     }
 
+    /**
+     * 读取响应体，最多 {@link #MAX_BODY_BYTES} 字节。
+     *
+     * <p>{@code readAllBytes()} 会把对端发多少就读多少：代理返回一个巨大的错误页、
+     * 或者响应头谎报长度时，几 MB 甚至几百 MB 会直接塞进插件所在的服务端堆里，
+     * 而这条请求是后台定时跑的——最坏的情况就是“开了检查更新，服务端过一阵 OOM”。
+     * 十个 release 的正常响应只有几 KB，512 KB 已经足够宽松。</p>
+     */
+    private static String readBody(InputStream stream) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(8192);
+        byte[] chunk = new byte[8192];
+        int total = 0;
+        int read;
+        while ((read = stream.read(chunk)) >= 0) {
+            total += read;
+            if (total > MAX_BODY_BYTES) {
+                throw new IOException("响应体超过 " + MAX_BODY_BYTES + " 字节，已中止读取");
+            }
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toString(StandardCharsets.UTF_8);
+    }
+
     /** 控制台与在线管理员的提醒。发现更新时最多各提醒一次（同一版本）。 */
     private void announce(Result result) {
         if (result.status() != Status.AVAILABLE || result.release() == null) {
             return;
         }
-        UpdateSettings current = settings;
         GitHubRelease release = result.release();
+        // 同一版本只提醒一次：检查每 interval-hours 跑一次，没有这行的话在线管理员会被同样的
+        // “发现新版本”反复刷屏，直到有人真的去更新为止。
+        if (release.tag().equals(announcedTag)) {
+            return;
+        }
+        announcedTag = release.tag();
+        UpdateSettings current = settings;
         if (current.console()) {
             plugin.getLogger().info("发现新版本 " + release.tag() + "（当前 " + result.current() + "），下载："
                     + release.url());

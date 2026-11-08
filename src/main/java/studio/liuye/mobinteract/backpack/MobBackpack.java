@@ -21,7 +21,7 @@ public final class MobBackpack {
     MobBackpack() {
     }
 
-    void put(PlacementEntry entry, int amount) {
+    synchronized void put(PlacementEntry entry, int amount) {
         if (amount <= 0) {
             return;
         }
@@ -35,7 +35,7 @@ public final class MobBackpack {
      *
      * @return 加入后的持有数量
      */
-    public int add(PlacementEntry entry, int amount) {
+    public synchronized int add(PlacementEntry entry, int amount) {
         if (entry == null || amount <= 0) {
             return 0;
         }
@@ -43,11 +43,11 @@ public final class MobBackpack {
         return amountOf(entry);
     }
 
-    public boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return stock.isEmpty();
     }
 
-    public int total() {
+    public synchronized int total() {
         int total = 0;
         for (int amount : stock.values()) {
             total += amount;
@@ -55,26 +55,26 @@ public final class MobBackpack {
         return total;
     }
 
-    public int kinds() {
+    public synchronized int kinds() {
         return stock.size();
     }
 
-    public int amountOf(PlacementEntry entry) {
+    public synchronized int amountOf(PlacementEntry entry) {
         return stock.getOrDefault(entry, 0);
     }
 
     /** 只读快照，供命令展示。 */
-    public Map<PlacementEntry, Integer> snapshot() {
+    public synchronized Map<PlacementEntry, Integer> snapshot() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(stock));
     }
 
     /** 当前剩余条目列表。 */
-    public List<PlacementEntry> entries() {
+    public synchronized List<PlacementEntry> entries() {
         return new ArrayList<>(stock.keySet());
     }
 
     /** 从剩余条目中按条目权重重新抽样，可能返回 {@code null}（背包为空）。 */
-    public PlacementEntry pick(Random random) {
+    public synchronized PlacementEntry pick(Random random) {
         List<PlacementEntry> candidates = entries();
         if (candidates.isEmpty()) {
             return null;
@@ -83,7 +83,7 @@ public final class MobBackpack {
     }
 
     /** 消耗一个条目；耗尽后自动从背包移除。 */
-    public void consume(PlacementEntry entry) {
+    public synchronized void consume(PlacementEntry entry) {
         if (entry == null) {
             return;
         }
@@ -97,7 +97,7 @@ public final class MobBackpack {
      * 期间目标重新激活可能又抽到同一个条目，造成“背包已经空了却还在放”。
      * 因此改成选中时就扣除，失败再通过 {@link #giveBack(PlacementEntry)} 退回。</p>
      */
-    public boolean take(PlacementEntry entry) {
+    public synchronized boolean take(PlacementEntry entry) {
         if (entry == null) {
             return false;
         }
@@ -114,7 +114,7 @@ public final class MobBackpack {
     }
 
     /** 退回一个条目（放置失败时使用）。 */
-    public void giveBack(PlacementEntry entry) {
+    public synchronized void giveBack(PlacementEntry entry) {
         if (entry == null) {
             return;
         }

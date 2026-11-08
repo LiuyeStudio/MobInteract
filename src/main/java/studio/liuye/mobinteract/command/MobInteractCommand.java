@@ -190,6 +190,26 @@ public final class MobInteractCommand implements CommandExecutor, TabCompleter {
             send(player, "command.inspect.no-mob");
             return;
         }
+        // 被看的怪可能站在另一个区域里：跨区域读实体会抛异常（而且这条报错会盖掉真正的回复），
+        // 所以不在本区域就切到它自己的实体调度器上再读。
+        if (sameRegion(nearest)) {
+            inspectMob(player, nearest);
+        } else {
+            plugin.schedulers().entity(nearest, () -> inspectMob(player, nearest));
+        }
+    }
+
+    /** 当前线程是否拥有这只怪所在的区域。 */
+    private boolean sameRegion(Mob mob) {
+        try {
+            return org.bukkit.Bukkit.isOwnedByCurrentRegion(mob);
+        } catch (Throwable throwable) {
+            return false;
+        }
+    }
+
+    /** 必须在目标怪物所属区域的线程上执行。 */
+    private void inspectMob(Player player, Mob nearest) {
         MobProfile profile = plugin.registry().find(nearest.getUniqueId());
         send(player, "command.inspect.header", "mob", nearest.getType());
         if (profile == null) {
@@ -346,6 +366,10 @@ public final class MobInteractCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!sender.hasPermission("mobinteract.admin")) {
+            // 没权限的玩家不该看到补全列表：否则任何人都能靠按 Tab 摸清有哪些子命令。
+            return List.of();
+        }
         if (args.length <= 1) {
             String prefix = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
             return SUBCOMMANDS.stream().filter(option -> option.startsWith(prefix)).toList();

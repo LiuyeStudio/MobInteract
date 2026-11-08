@@ -67,10 +67,24 @@ public final class TempBlockRegistry {
     private final Map<String, TrackedBlock> tracked = new ConcurrentHashMap<>();
     /** 插入顺序队列，用于在超过容量时淘汰最旧记录。 */
     private final ConcurrentLinkedQueue<String> insertionOrder = new ConcurrentLinkedQueue<>();
-    /** 到期时间表（毫秒；0 = 永久，不入表）。全局清扫器按时间顺序取出。 */
+
+    /**
+     * 到期时间表（毫秒；0 = 永久，不入表）。全局清扫器按时间顺序取出。
+     *
+     * <p>{@link PriorityQueue} <b>不是线程安全的</b>，而这里的读写天生跨线程：
+     * 写入来自“方块所在区域线程”（放置 / 续期），读取来自全局清扫线程。
+     * 并发 add 触发扩容时可能破坏堆结构（抛 {@code ArrayIndexOutOfBoundsException}）
+     * 或者更隐蔽地静默丢条目——那块方块就再也不到期，永远留在地图上。
+     * 所以所有访问都走 {@code expiryLock}。</p>
+     */
     private final PriorityQueue<Expiry> expiries = new PriorityQueue<>(Comparator.comparingLong(Expiry::atMillis));
+    private final Object expiryLock = new Object();
 
     private record Expiry(String key, long atMillis) {
+    }
+
+    /** 区块标识：按世界 UUID + 区块坐标精确分组，不拼位域（拼位域会碰撞）。 */
+    private record ChunkRef(UUID worldId, int chunkX, int chunkZ) {
     }
 
     public TempBlockRegistry(MobInteractPlugin plugin) {
@@ -91,16 +105,15 @@ public final class TempBlockRegistry {
      */
     void sweep() {
         long now = System.currentTimeMillis();
-        Map<Long, List<TrackedBlock>> byChunk = new HashMap<>();
-        while (true) {
-            Expiry next = expiries.peek();
-            if (next == null || next.atMillis() > now) {
-                break;
-            }
-            expiries.poll();
+        Map<ChunkRef, List<TrackedBlock>> byChunk = new HashMap<>();
+        for (Expiry next : drainDue(now)) {
             TrackedBlock entry = tracked.get(next.key());
             if (entry == null) {
                 continue;   // 已经被删 / 被替换
+            }
+            if (entry.expireAtMillis() <= 0L) {
+                // 这一格后来被改登记成“永久方块”（lifetime 改成 0）：旧到期条目作废。
+                continue;
             }
             if (entry.expireAtMillis() > next.atMillis()) {
                 // 同一格被重新登记过（有更晚的到期时间）：这条是旧的，丢掉。
@@ -109,7 +122,7 @@ public final class TempBlockRegistry {
             World world = plugin.getServer().getWorld(entry.worldId());
             if (world == null || !world.isChunkLoaded(entry.x() >> 4, entry.z() >> 4)) {
                 // 区块没加载：延后 5 秒再试，绝不丢记录。
-                expiries.add(new Expiry(next.key(), now + RETRY_DELAY_MILLIS));
+                enqueueExpiry(next.key(), now + RETRY_DELAY_MILLIS);
                 continue;
             }
             byChunk.computeIfAbsent(chunkKey(entry), key -> new ArrayList<>()).add(entry);
@@ -122,6 +135,11 @@ public final class TempBlockRegistry {
             }
             boolean submitted = plugin.schedulers().region(world, first.x(), first.z(), () -> {
                 for (TrackedBlock entry : entries) {
+                    // 提交到执行之间这一格可能被重新放置过：到期时间变了就说明手上的条目已过期。
+                    TrackedBlock current = tracked.get(entry.key());
+                    if (current == null || current.expireAtMillis() != entry.expireAtMillis()) {
+                        continue;
+                    }
                     if (hasEntityStandingOn(world, entry)) {
                         // 方块上还站着生物（包括正在过桥的怪物）：再延一个完整的放置时间。
                         extend(entry);
@@ -136,6 +154,24 @@ public final class TempBlockRegistry {
                     retryLater(entry);
                 }
             }
+        }
+    }
+
+    /** 取走所有已到期的条目（加锁，避免与区域线程的写入竞争）。 */
+    private List<Expiry> drainDue(long now) {
+        List<Expiry> due = new ArrayList<>();
+        synchronized (expiryLock) {
+            Expiry next;
+            while ((next = expiries.peek()) != null && next.atMillis() <= now) {
+                due.add(expiries.poll());
+            }
+        }
+        return due;
+    }
+
+    private void enqueueExpiry(String key, long atMillis) {
+        synchronized (expiryLock) {
+            expiries.add(new Expiry(key, atMillis));
         }
     }
 
@@ -170,7 +206,8 @@ public final class TempBlockRegistry {
             return false;
         } catch (Throwable throwable) {
             plugin.getLogger().log(java.util.logging.Level.WARNING, "续期检查失败：查询方块上方生物出错", throwable);
-            return false;
+            // 读不到就当成“上面站着生物”：宁可多留一个方块，也不要把生物脚下的方块抽走（会让人掉下去 / 卡在墙里）。
+            return true;
         }
     }
 
@@ -184,15 +221,20 @@ public final class TempBlockRegistry {
             return;
         }
         tracked.put(entry.key(), entry.withExpiry(expireAt));
-        expiries.add(new Expiry(entry.key(), expireAt));
+        enqueueExpiry(entry.key(), expireAt);
     }
 
-    /** 区块标识：世界 UUID + 区块坐标，用于把同一区块的到期方块合并成一次区域任务。 */
-    private static long chunkKey(TrackedBlock entry) {
-        long worldHash = entry.worldId().getLeastSignificantBits() & 0xFFFF_FFFFL;
-        long cx = (entry.x() >> 4) & 0xFFFF_FFFFL;
-        long cz = (entry.z() >> 4) & 0xFFFF_FFFFL;
-        return (worldHash << 40) ^ (cx << 20) ^ cz;
+    /**
+     * 区块标识：世界 UUID + 区块坐标，用于把同一区块的到期方块合并成一次区域任务。
+     *
+     * <p>旧实现把三者塞进一个 long（{@code worldHash<<40 ^ cx<<20 ^ cz}）：世界哈希只留 24 位、
+     * {@code cx<<20} 与它重叠、{@code cz} 又与 {@code cx<<20} 重叠，于是
+     * {@code (cx=1, cz=1048576)} 和 {@code (cx=0, cz=0)} 会算出同一个 key——两个不同区块的方块
+     * 被并成一批，任务投到第一个区块的区域线程里，去改另一个区块的方块，直接炸掉整批。
+     * 用 record 当 Map key 就没有这个问题。</p>
+     */
+    private static ChunkRef chunkKey(TrackedBlock entry) {
+        return new ChunkRef(entry.worldId(), entry.x() >> 4, entry.z() >> 4);
     }
 
     /**
@@ -214,7 +256,7 @@ public final class TempBlockRegistry {
         pruneIfNeeded();
         if (expireAt > 0L) {
             // 交给全局清扫器（比一次性延迟任务可靠：区域暂停 / 区块未加载都不会丢）。
-            expiries.add(new Expiry(entry.key(), expireAt));
+            enqueueExpiry(entry.key(), expireAt);
         }
     }
 
@@ -278,7 +320,7 @@ public final class TempBlockRegistry {
     /** 这次删不了（区块没加载 / 读失败）：把这条重新排进到期表，别让记录变成孤儿。 */
     private void retryLater(TrackedBlock entry) {
         tracked.put(entry.key(), entry);
-        expiries.add(new Expiry(entry.key(), System.currentTimeMillis() + RETRY_DELAY_MILLIS));
+        enqueueExpiry(entry.key(), System.currentTimeMillis() + RETRY_DELAY_MILLIS);
     }
 
     /**
@@ -478,6 +520,18 @@ public final class TempBlockRegistry {
         tracked.remove(key);
     }
 
+    /**
+     * 容量控制。
+     *
+     * <p>两个方向都要管：</p>
+     * <ol>
+     *   <li>登记表超过 {@link #MAX_TRACKED} 时淘汰最旧的记录（原有的“防永久累积”）；</li>
+     *   <li><b>插入顺序队列本身</b>也要压缩。{@code remove()} 只删 map、不删队列，
+     *       而正常运行时 map 是“放一个删一个”、永远到不了 5 万，所以旧实现的
+     *       {@code poll()} 几乎从不发生——队列只增不减，24×7 跑下去就是内存曲线只涨不跌
+     *       （每个 key 加节点约 100 多字节，一百万次放置就是上百 MB）。</li>
+     * </ol>
+     */
     private void pruneIfNeeded() {
         while (tracked.size() > MAX_TRACKED) {
             String oldest = insertionOrder.poll();
@@ -485,6 +539,10 @@ public final class TempBlockRegistry {
                 return;
             }
             tracked.remove(oldest);
+        }
+        if (insertionOrder.size() > MAX_TRACKED) {
+            // 只是“曾经登记过的 key”太多了：把已经不在登记表里的清掉即可（弱一致遍历，安全）。
+            insertionOrder.removeIf(key -> !tracked.containsKey(key));
         }
     }
 

@@ -132,12 +132,25 @@ public final class MobLifecycleListener implements Listener {
         plugin.pickup().absorb(mob, event.getItem(), settings);
     }
 
-    /** 实体被移除时回收运行期状态，避免注册表长期增长。 */
+    /**
+     * 实体被移除时回收运行期状态，避免注册表长期增长。
+     *
+     * <p><b>区块卸载不能回收</b>：{@code Cause.UNLOAD} 之后同一只怪会带着同一个 UUID 回来，
+     * 而回来时走的是 {@code EntityAddToWorldEvent} → 新建 {@code MobProfile} →
+     * 重新掷一次出生装备 / 背包骰子。等于“走远再走回来”就能把 10% 的概率刷到过为止，
+     * 每次还白送 6~20 个方块。所以这里只保留 UNLOAD（以及僵尸→溺尸这类形态转换，
+     * 转换后不会再触发 AddToWorld，删了会让它永久失去定时器）。</p>
+     */
     @EventHandler
     public void onEntityRemove(EntityRemoveEvent event) {
-        if (event.getEntity() instanceof Mob mob) {
-            plugin.registry().remove(mob.getUniqueId());
+        if (!(event.getEntity() instanceof Mob mob)) {
+            return;
         }
+        EntityRemoveEvent.Cause cause = event.getCause();
+        if (cause == EntityRemoveEvent.Cause.UNLOAD || cause == EntityRemoveEvent.Cause.TRANSFORMATION) {
+            return;
+        }
+        plugin.registry().remove(mob.getUniqueId());
     }
 
     /**

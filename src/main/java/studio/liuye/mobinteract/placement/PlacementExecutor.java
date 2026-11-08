@@ -10,9 +10,12 @@ import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import studio.liuye.mobinteract.MobInteractPlugin;
 import studio.liuye.mobinteract.api.MobBlockChangeEvent;
@@ -21,6 +24,7 @@ import studio.liuye.mobinteract.config.PlacementEntry;
 import studio.liuye.mobinteract.config.PlacementSettings;
 import studio.liuye.mobinteract.safety.BlockSafety;
 import studio.liuye.mobinteract.util.BlockPos;
+import studio.liuye.mobinteract.util.RegionAccess;
 
 /**
  * 真正执行“放置”的一步。
@@ -32,6 +36,12 @@ import studio.liuye.mobinteract.util.BlockPos;
 public final class PlacementExecutor {
 
     private final MobInteractPlugin plugin;
+
+    /** TNT 的波及半径（格）。原版爆炸半径约 4 格，这里按 4 格保守检查。 */
+    private static final int TNT_CHECK_RADIUS = 4;
+
+    /** 流体只检查一格邻域：水 / 岩浆落地后最多先流一格。 */
+    private static final int FLUID_CHECK_RADIUS = 1;
 
     public PlacementExecutor(MobInteractPlugin plugin) {
         this.plugin = plugin;
@@ -102,6 +112,11 @@ public final class PlacementExecutor {
         if (!BlockSafety.canPlaceAt(block, settings)) {
             return false;
         }
+        if (occupied(world, pos, mob)) {
+            // 规划时说好是空位、真到执行时却有人站进去了（玩家追怪跑过、别的怪挤过来）。
+            // 从“决定放”到“真的放”至少要跨好几个 tick，这中间世界会变，所以必须在写入前复核一次。
+            return false;
+        }
         if (!plugin.canChange(block, mob, MobBlockChangeEvent.Action.PLACE)) {
             return false;
         }
@@ -123,6 +138,10 @@ public final class PlacementExecutor {
                 return true;
             }
             case FLUID -> {
+                if (neighboursProtected(mob, pos, FLUID_CHECK_RADIUS)) {
+                    // 水 / 岩浆落地后会往四周流一格：只校验落点，等于给保护区开了个后门。
+                    return false;
+                }
                 BlockData data;
                 try {
                     data = entry.resolveBlockData();
@@ -137,6 +156,11 @@ public final class PlacementExecutor {
                 return true;
             }
             case TNT -> {
+                if (neighboursProtected(mob, pos, TNT_CHECK_RADIUS)) {
+                    // 爆炸会波及半径内的方块：落点本身可能就在保护区外，只查落点等于放行。
+                    // 宁可这次不炸，也不替服主拆掉保护区边缘的建筑。
+                    return false;
+                }
                 // 规格要求：不要“先放 TNT 方块再点燃”，直接生成已点燃的 TNT 实体。
                 if (block.getType() != Material.AIR && block.isReplaceable()) {
                     // 目标位置若残留可替换方块（草、雪等），先清掉，避免出现“方块 + 实体”中间态。
@@ -163,6 +187,67 @@ public final class PlacementExecutor {
                 return false;
             }
         }
+    }
+
+    /**
+     * 这一格是否已经被“活的东西”占了。
+     *
+     * <p>方块是 1×1×1，实体却是浮点包围盒，所以取方块内部收窄一点的范围去查：
+     * 只碰到方块边角的生物不算占用（否则贴着墙走的玩家会把整条路堵死），
+     * 真正站在方块中央的才算。</p>
+     *
+     * <p>查询失败按<b>占用</b>处理：这一轮不放，最多是怪物少铺一块；
+     * 反过来就是往玩家身上塞方块，人会被卡进墙里。</p>
+     */
+    private boolean occupied(World world, BlockPos pos, Mob mob) {
+        BoundingBox box = new BoundingBox(
+                pos.x() + 0.15D, pos.y() + 0.05D, pos.z() + 0.15D,
+                pos.x() + 0.85D, pos.y() + 0.95D, pos.z() + 0.85D);
+        try {
+            for (Entity entity : world.getNearbyEntities(box)) {
+                if (entity == mob || !entity.isValid() || entity.isDead()) {
+                    continue;
+                }
+                if (entity instanceof LivingEntity) {
+                    return true;
+                }
+            }
+        } catch (Throwable throwable) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 落点周围的方块里有没有被保护插件拦着的。
+     *
+     * <p>{@code canChange} 只校验落点本身，可爆炸和流体都会波及邻格：在保护区外一格倒水、
+     * 或贴着保护区边缘点 TNT，照样能改到保护区里的方块。这里按半径粗查一遍，
+     * 命中任意一格就放弃这次放置（宁可这次不放，也不替服主拆家）。</p>
+     */
+    private boolean neighboursProtected(Mob mob, BlockPos pos, int radius) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) {
+                        continue;
+                    }
+                    BlockPos candidate = pos.offset(dx, dy, dz);
+                    if (!RegionAccess.own(candidate)) {
+                        // 邻格属于别的区域：这一轮不判它，交给它自己的区域线程处理。
+                        continue;
+                    }
+                    Block block = candidate.block();
+                    if (block.getType() == Material.AIR) {
+                        continue;
+                    }
+                    if (!plugin.canChange(block, mob, MobBlockChangeEvent.Action.PLACE)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /** 该条目放置成功后是否要从背包扣除（桶可以配置为不消耗）。 */

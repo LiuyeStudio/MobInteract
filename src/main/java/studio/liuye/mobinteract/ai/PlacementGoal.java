@@ -28,6 +28,7 @@ import studio.liuye.mobinteract.placement.PlacementExecutor;
 import studio.liuye.mobinteract.placement.PlacementPlanner;
 import studio.liuye.mobinteract.placement.PlacementTarget;
 import studio.liuye.mobinteract.util.BlockPos;
+import studio.liuye.mobinteract.util.RegionAccess;
 
 /**
  * 放置行为（Mob Goals 实现）。
@@ -456,7 +457,7 @@ public final class PlacementGoal implements Goal<Mob> {
         if (spot.isPillarUp()) {
             // 垫高必须正好在脚下这一格：挪开一格就会变成在旁边乱放方块。
             return spot.pos().equals(BlockPos.of(mob.getLocation().getBlock()))
-                    && spot.pos().block().isReplaceable();
+                    && RegionAccess.isReplaceable(spot.pos());
         }
         // 楼梯 / 桥面必须仍在“身前相邻一格”：怪物被挤开以后照旧放，就会多出一块乱放的方块。
         if (!isSingleStepForward(mob.getLocation())) {
@@ -474,7 +475,7 @@ public final class PlacementGoal implements Goal<Mob> {
         } else if (spot.pos().distanceTo(mob.getLocation()) > settings.maxDistance()) {
             return false;
         }
-        return spot.pos().block().isReplaceable();
+        return RegionAccess.isReplaceable(spot.pos());
     }
 
     /** 落点是否正好是身前那一格（同一高度、下方一格或下潜时再下一格）。 */

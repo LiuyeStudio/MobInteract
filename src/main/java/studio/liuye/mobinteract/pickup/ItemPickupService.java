@@ -114,7 +114,7 @@ public final class ItemPickupService {
         if (!settings.pickupBlocks() || !settings.hasEntries()) {
             return false;
         }
-        return PickedItems.canStore(material);
+        return PickedItems.canStore(material, settings.entries());
     }
 
     /**
@@ -199,7 +199,7 @@ public final class ItemPickupService {
             profile.setLastStatus("捡到镐子 " + material.name());
             return;
         }
-        if (!settings.pickupBlocks() || !PickedItems.canStore(material)) {
+        if (!settings.pickupBlocks() || !PickedItems.canStore(material, settings.entries())) {
             returnToGround(mob, stack);
             return;
         }

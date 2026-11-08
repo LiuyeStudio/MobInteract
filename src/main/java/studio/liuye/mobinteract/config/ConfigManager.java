@@ -37,6 +37,8 @@ public final class ConfigManager {
     public static final String EQUIP_FILE = "equip.yml";
     /** 索敌偏好（优先追杀玩家）。 */
     public static final String TARGETING_FILE = "targeting.yml";
+    /** 检查更新（GitHub Releases）。 */
+    public static final String UPDATE_FILE = "update.yml";
 
     /** 配置结构版本：写进 placement.yml 的 {@code config-version}，用于识别旧文件并做迁移。 */
     public static final int CONFIG_VERSION = 2;
@@ -56,7 +58,7 @@ public final class ConfigManager {
 
     /** 首次启动时把 jar 内的默认配置写到 data 目录。 */
     public void saveDefaultsIfMissing() {
-        for (String name : new String[] {MINING_FILE, PLACEMENT_FILE, EQUIP_FILE, TARGETING_FILE}) {
+        for (String name : new String[] {MINING_FILE, PLACEMENT_FILE, EQUIP_FILE, TARGETING_FILE, UPDATE_FILE}) {
             File file = new File(plugin.getDataFolder(), name);
             if (!file.exists()) {
                 plugin.saveResource(name, false);
@@ -109,6 +111,43 @@ public final class ConfigManager {
     }
 
     /**
+     * 解析 {@code update.yml}：检查更新的开关、仓库地址与提醒方式。
+     *
+     * <p>仓库地址写得不合法（不是 {@code owner/repo}）时回退到内置默认值，
+     * 免得每几小时对着一个必然 404 的地址发请求。</p>
+     */
+    private UpdateSettings parseUpdate(YamlConfiguration config) {
+        UpdateSettings defaults = UpdateSettings.defaults();
+        if (config == null) {
+            return defaults;
+        }
+        boolean enabled = config.getBoolean("enabled", defaults.enabled());
+        String repository = config.getString("repository", defaults.repository());
+        if (repository == null) {
+            repository = defaults.repository();
+        }
+        repository = repository.trim()
+                .replace("https://github.com/", "")
+                .replace("http://github.com/", "")
+                .replaceAll("\\.git$", "");
+        if (repository.indexOf('/') <= 0 || repository.endsWith("/")) {
+            plugin.getLogger().warning(UPDATE_FILE + "：repository 需要写成 owner/repo，已回退到 "
+                    + defaults.repository());
+            repository = defaults.repository();
+        }
+        int firstDelay = clampInt(config.getInt("first-delay-seconds", defaults.firstDelaySeconds()), 0, 3600);
+        int intervalHours = clampInt(config.getInt("interval-hours", defaults.intervalHours()), 0, 24 * 14);
+        boolean console = config.getBoolean("console", defaults.console());
+        boolean notifyOnline = config.getBoolean("notify-online-admins", defaults.notifyOnlineAdmins());
+        boolean notifyJoin = config.getBoolean("notify-on-join", defaults.notifyOnJoin());
+        boolean prerelease = config.getBoolean("include-prerelease", defaults.includePrerelease());
+        int timeout = clampInt(config.getInt("timeout-seconds", defaults.timeoutSeconds()), 1, 60);
+        boolean debug = config.getBoolean("debug", defaults.debug());
+        return new UpdateSettings(enabled, repository, firstDelay, intervalHours, console, notifyOnline,
+                notifyJoin, prerelease, timeout, debug);
+    }
+
+    /**
      * 重新读取配置文件（mining / placement / equip）。
      *
      * @return 新的配置快照
@@ -118,8 +157,9 @@ public final class ConfigManager {
         YamlConfiguration placement = load(PLACEMENT_FILE);
         YamlConfiguration equip = load(EQUIP_FILE);
         YamlConfiguration targeting = load(TARGETING_FILE);
+        YamlConfiguration update = load(UPDATE_FILE);
         Settings snapshot = new Settings(parseMining(mining), parsePlacement(placement), parseEquip(equip),
-                parseTargeting(targeting));
+                parseTargeting(targeting), parseUpdate(update));
         this.settings = snapshot;
         return snapshot;
     }

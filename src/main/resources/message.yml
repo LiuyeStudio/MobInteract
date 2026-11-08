@@ -34,7 +34,7 @@ command:
     no-permission: '&c你没有权限使用该命令。'
 
     # 子命令写错时的用法提示。占位符：{label} = 实际输入的命令（含别名）。
-    usage: '&e用法：/{label} <reload|status|inspect>'
+    usage: '&e用法：/{label} <reload|status|inspect|update>'
 
     # 只能由玩家执行的子命令被控制台执行时的提示。无占位符。
     player-only: '&c该子命令只能由玩家执行。'
@@ -214,3 +214,45 @@ command:
 
     # 重载失败（详细堆栈在控制台）。无占位符。
     failed: '&c配置重载失败，详见控制台日志。'
+
+  # ------------------------------------------------------------
+  #  /mobinteract update 的回话（检查 GitHub Releases）
+  # ------------------------------------------------------------
+  update:
+
+    # 请求已发出（异步执行，稍后才回话）。占位符：{current} = 当前插件版本。
+    checking: '&7正在检查更新…（当前版本 &f{current}&7）'
+
+    # 已是最新版本。占位符：{current} = 当前插件版本。
+    latest: '&a已是最新版本：&f{current}'
+
+    # 发现新版本。占位符：{current} = 当前版本，{latest} = 最新版本，{url} = Release 页面地址。
+    available: '&e发现新版本：&f{current} &7→ &a{latest}&7　下载：&f{url}'
+
+    # 检查失败（网络不通 / 超时 / 仓库里没有 Release）。占位符：{reason} = 失败原因。
+    failed: '&c检查更新失败：&f{reason}'
+
+    # 检查更新被关闭（update.yml 的 enabled: false）。无占位符。
+    disabled: '&7检查更新已关闭（update.yml 的 enabled: false）。'
+
+# ============================================================
+#  更新提醒：检查到新版本后主动推送的文本
+#  （是否推送由 update.yml 的 console / notify-online-admins / notify-on-join 决定）
+# ============================================================
+update:
+
+  # 在线管理员收到的私聊。
+  # 占位符：{current} = 当前版本，{latest} = 最新版本，{url} = Release 页面地址。
+  notify:
+    - '&8&m--------&r &bMobInteract &8&m--------'
+    - '&e有新版本可用：&f{current} &7→ &a{latest}'
+    - '&7下载地址：&f{url}'
+    - '&7可在 update.yml 里关闭这类提醒。'
+
+  # 管理员上线时的提醒（用的最近一次检查结果，不会额外请求 GitHub；每人每次开服一次）。
+  # 占位符同上。
+  join-notice:
+    - '&8&m--------&r &bMobInteract &8&m--------'
+    - '&e有新版本可用：&f{current} &7→ &a{latest}'
+    - '&7下载地址：&f{url}'
+    - '&7可用 /mobinteract update 立即检查，或在 update.yml 里关闭提醒。'

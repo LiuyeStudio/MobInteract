@@ -34,7 +34,7 @@
 
 1. 到 [Releases](https://github.com/LiuyeStudio/MobInteract/releases) 下载最新的 `MobInteract-x.y.z.jar`。
 2. 丢进服务端的 `plugins/` 目录，重启服务器。
-3. 首次启动会在 `plugins/MobInteract/` 生成四份配置文件：`mining.yml`、`placement.yml`、`equip.yml`、`message.yml`（还有一份 `targeting.yml`，都带中文注释）。
+3. 首次启动会在 `plugins/MobInteract/` 生成六份配置文件：`mining.yml`、`placement.yml`、`equip.yml`、`targeting.yml`、`message.yml`、`update.yml`，都带中文注释。
 4. 进游戏敲 `/mobinteract status` 看一眼配置摘要；找只僵尸出来，`/mobinteract inspect` 对着它就能看到它现在在想什么。
 
 升级时直接替换 jar 重启即可，配置文件不会被覆盖；旧版本里改过的值以你的文件为准。详细步骤见 [安装、升级与卸载](https://github.com/LiuyeStudio/MobInteract/wiki/Installation-zh)。
@@ -48,10 +48,11 @@
 | `/mobinteract status` | 配置摘要：生物 / 世界筛选、挖掘参数、放置上限、出生装备概率、已知怪物数、临时方块数、保护插件接入状态 |
 | `/mobinteract inspect` | 看准星前方怪物的实时状态：冷却、单次追击已放置数、主手镐子、背包内容、最近一次行为（排查"它为什么不走"的第一手信息） |
 | `/mobinteract reload` | 热重载全部配置，不打断正在进行的挖掘 / 搭路 |
+| `/mobinteract update` | 立刻去 GitHub Releases 查一次有没有新版本（插件平时也会自己在后台查） |
 
 ## 配置一览
 
-四份配置文件各自管一件事，改完 `/mobinteract reload` 立即生效：
+六份配置文件各自管一件事，改完 `/mobinteract reload` 立即生效：
 
 | 文件 | 管什么 |
 | --- | --- |
@@ -60,6 +61,7 @@
 | `equip.yml` | 出生装备总闸门：多少比例的怪物天生带镐子 / 带背包 |
 | `targeting.yml` | 优先追杀玩家：附近有玩家就把目标切过去 |
 | `message.yml` | 所有发给玩家的文本：颜色、措辞、多行 |
+| `update.yml` | 检查更新：开关、查哪个仓库、多久查一次、谁能收到提醒 |
 
 每个键的含义、默认值和调参建议都在 Wiki 里，按主题分页：
 

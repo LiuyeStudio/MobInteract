@@ -15,10 +15,10 @@ commands:
   mobinteract:
     aliases: [mi]
     description: MobInteract 管理命令
-    usage: /mobinteract <reload|status|inspect>
+    usage: /mobinteract <reload|status|inspect|update>
     permission: mobinteract.admin
 
 permissions:
   mobinteract.admin:
-    description: 允许重载配置并查看行为状态
+    description: 允许重载配置、查看行为状态并检查更新
     default: op

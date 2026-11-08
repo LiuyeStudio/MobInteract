@@ -23,11 +23,12 @@ import studio.liuye.mobinteract.config.PlacementSettings;
 import studio.liuye.mobinteract.config.WorldFilter;
 import studio.liuye.mobinteract.message.Messages;
 import studio.liuye.mobinteract.mob.MobProfile;
+import studio.liuye.mobinteract.update.UpdateChecker;
 
-/** {@code /mobinteract <reload|status|inspect>} 管理命令。 */
+/** {@code /mobinteract <reload|status|inspect|update>} 管理命令。 */
 public final class MobInteractCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = List.of("reload", "status", "inspect");
+    private static final List<String> SUBCOMMANDS = List.of("reload", "status", "inspect", "update");
 
     private final MobInteractPlugin plugin;
 
@@ -46,6 +47,7 @@ public final class MobInteractCommand implements CommandExecutor, TabCompleter {
             case "reload" -> reload(sender);
             case "status" -> status(sender);
             case "inspect" -> inspect(sender);
+            case "update" -> update(sender);
             default -> send(sender, "command.common.usage", "label", label);
         }
         return true;
@@ -62,6 +64,38 @@ public final class MobInteractCommand implements CommandExecutor, TabCompleter {
                 reply(sender, "command.reload.failed");
             }
         });
+    }
+
+    /**
+     * 手动检查更新：请求在异步线程发出，结果切回全局区域线程再回话。
+     *
+     * <p>{@link #reply} 会把玩家消息再送回该玩家自己的实体线程，
+     * 所以这里不用额外关心 Folia 的线程归属。</p>
+     */
+    private void update(CommandSender sender) {
+        UpdateChecker checker = plugin.updateChecker();
+        if (checker == null) {
+            send(sender, "command.update.failed", "reason", messages().get("command.common.none"));
+            return;
+        }
+        send(sender, "command.update.checking", "current", checker.currentVersion());
+        checker.checkNow(result -> plugin.schedulers().global(() -> replyUpdate(sender, result)));
+    }
+
+    private void replyUpdate(CommandSender sender, UpdateChecker.Result result) {
+        if (result == null) {
+            reply(sender, "command.update.failed", "reason", messages().get("command.common.none"));
+            return;
+        }
+        switch (result.status()) {
+            case AVAILABLE -> reply(sender, "command.update.available",
+                    "current", result.current(),
+                    "latest", result.release().tag(),
+                    "url", result.release().url());
+            case UP_TO_DATE -> reply(sender, "command.update.latest", "current", result.current());
+            case DISABLED -> reply(sender, "command.update.disabled");
+            case FAILED -> reply(sender, "command.update.failed", "reason", result.detail());
+        }
     }
 
     private void status(CommandSender sender) {

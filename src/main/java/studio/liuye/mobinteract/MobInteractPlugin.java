@@ -26,6 +26,8 @@ import studio.liuye.mobinteract.placement.PlacementExecutor;
 import studio.liuye.mobinteract.placement.TempBlockRegistry;
 import studio.liuye.mobinteract.pickup.ItemPickupService;
 import studio.liuye.mobinteract.safety.ProtectionService;
+import studio.liuye.mobinteract.update.UpdateChecker;
+import studio.liuye.mobinteract.update.UpdateJoinListener;
 import studio.liuye.mobinteract.util.BlockPos;
 import studio.liuye.mobinteract.util.Schedulers;
 
@@ -56,6 +58,7 @@ public final class MobInteractPlugin extends JavaPlugin {
     private PickaxeService pickaxeService;
     private ItemPickupService pickupService;
     private studio.liuye.mobinteract.targeting.PlayerPriorityService playerPriority;
+    private UpdateChecker updateChecker;
 
     @Override
     public void onEnable() {
@@ -96,6 +99,12 @@ public final class MobInteractPlugin extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new MobLifecycleListener(this), this);
 
+        // 检查更新：只读 GitHub 的公开 Release 列表，异步执行，失败静默。
+        updateChecker = new UpdateChecker(this);
+        updateChecker.configure(settings.update());
+        updateChecker.start();
+        getServer().getPluginManager().registerEvents(new UpdateJoinListener(this), this);
+
         // 上次卸载 / 崩溃时没删干净的怪物方块：启动后兜底清一遍。
         tempBlocks.loadJournalAndClean();
         // 到期清扫器：每 20 tick 扫一次到期的临时方块（不依赖一次性延迟任务）。
@@ -115,6 +124,10 @@ public final class MobInteractPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (updateChecker != null) {
+            // 先取消异步检查任务，避免插件卸载后还往日志里写东西。
+            updateChecker.stop();
+        }
         if (tempBlocks != null) {
             // 卸载时把怪物放下的方块全部清掉（插件卸载 / 被替换 / 关服都会走到这里）。
             // 先把清单落盘：万一关服过程中被强杀、或 Folia 区域线程已不再执行任务，
@@ -151,10 +164,20 @@ public final class MobInteractPlugin extends JavaPlugin {
         return messages;
     }
 
-    /** 重载全部配置：mining / placement / equip 与 message.yml。 */
+    /** 检查更新（GitHub Releases）。 */
+    public UpdateChecker updateChecker() {
+        return updateChecker;
+    }
+
+    /** 重载全部配置：mining / placement / equip / targeting / update 与 message.yml。 */
     public void reloadSettings() {
-        configManager.reload();
+        Settings refreshed = configManager.reload();
         messages.reload();
+        if (updateChecker != null) {
+            updateChecker.configure(refreshed.update());
+            // 重新排检查任务：改间隔、临时关掉再打开都能立刻生效。
+            updateChecker.start();
+        }
     }
 
     public MobRegistry registry() {

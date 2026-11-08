@@ -34,7 +34,7 @@ This is **not** a general-purpose mob AI and it does not replace vanilla pathfin
 
 1. Grab the latest `MobInteract-x.y.z.jar` from [Releases](https://github.com/LiuyeStudio/MobInteract/releases).
 2. Drop it into your server's `plugins/` folder and restart.
-3. On first start it creates five configuration files in `plugins/MobInteract/`: `mining.yml`, `placement.yml`, `equip.yml`, `targeting.yml`, `message.yml` — all with comments.
+3. On first start it creates six configuration files in `plugins/MobInteract/`: `mining.yml`, `placement.yml`, `equip.yml`, `targeting.yml`, `message.yml`, `update.yml` — all with comments.
 4. In game, run `/mobinteract status` for a configuration summary, then aim at a zombie and run `/mobinteract inspect` to see what it is currently thinking.
 
 To upgrade, just replace the jar and restart — your configuration files are never overwritten, and values you edited in an older version win. See [Installation, Upgrade and Removal](https://github.com/LiuyeStudio/MobInteract/wiki/Installation) for the details.
@@ -48,10 +48,11 @@ The command is `/mobinteract`, alias `/mi`, permission node `mobinteract.admin` 
 | `/mobinteract status` | Configuration summary: mob / world filters, mining parameters, build limits, equipment chance, known mobs, temporary blocks, protection-plugin status |
 | `/mobinteract inspect` | Live state of the mob you are looking at: cooldown, placements used in this chase, pickaxe in hand, stock contents, last action (the first thing to check when a mob "just won't move") |
 | `/mobinteract reload` | Hot-reloads every configuration file without interrupting an ongoing mining or building action |
+| `/mobinteract update` | Checks GitHub Releases for a newer version right away (the plugin also does this on its own in the background) |
 
 ## Configuration at a glance
 
-Five files, one job each; run `/mobinteract reload` and the change takes effect immediately:
+Six files, one job each; run `/mobinteract reload` and the change takes effect immediately:
 
 | File | What it controls |
 | --- | --- |
@@ -60,6 +61,7 @@ Five files, one job each; run `/mobinteract reload` and the change takes effect 
 | `equip.yml` | The spawn-equipment gate: what fraction of mobs are born with a pickaxe / with a stock |
 | `targeting.yml` | Player targeting: switch to the nearest player when one is around |
 | `message.yml` | Every message sent to players: colours, wording, multiple lines |
+| `update.yml` | Update checks: on or off, which repository to ask, how often, who gets told |
 
 Every key, default value and tuning advice lives in the wiki, one page per topic:
 
